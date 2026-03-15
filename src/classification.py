@@ -10,7 +10,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score
 
 from .preprocessing import PriorityPreprocessor, QueuePreprocessor
-from .training_utils import make_holdout_split
+from .training_utils import HoldoutSplit, make_holdout_split
 
 
 PREPROCESSOR_FACTORY = {
@@ -70,6 +70,10 @@ class ClassificationTrainer:
             random_state=self.random_state,
             stratify=True,
         )
+        return self.fit_on_split(split)
+
+    def fit_on_split(self, split: HoldoutSplit) -> ClassificationTrainer:
+        target_column = self.preprocessor.pipeline.target_column
         train_data = self.preprocessor.fit_transform(split.train_df)
         self.model.fit(train_data.X, train_data.y)
 
@@ -83,7 +87,7 @@ class ClassificationTrainer:
             "task_name": self.task_name,
             "train_rows": len(split.train_df),
             "test_rows": len(split.test_df),
-            "test_size": self.test_size,
+            "test_size": len(split.test_df) / max(len(split.train_df) + len(split.test_df), 1),
             "random_state": self.random_state,
             "class_weight": str(CLASS_WEIGHT_BY_TASK[self.task_name]),
         }
@@ -101,6 +105,13 @@ class ClassificationTrainer:
 
     def evaluate(self, df: pd.DataFrame) -> dict[str, float]:
         self.fit(df)
+        return self._score_current_split()
+
+    def evaluate_split(self, split: HoldoutSplit) -> dict[str, float]:
+        self.fit_on_split(split)
+        return self._score_current_split()
+
+    def _score_current_split(self) -> dict[str, float]:
         predictions = self.model.predict(self._require_test_X())
         truth = self._require_test_y()
         return {

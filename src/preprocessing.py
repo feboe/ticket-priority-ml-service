@@ -102,10 +102,10 @@ class TextPreparationPipeline:
 class TfidfFeatureExtractor:
     """Wrap a configured TF-IDF vectorizer."""
 
-    max_features: int = 20000
+    max_features: int = None
     min_df: int = 2
     max_df: float = 0.95
-    ngram_range: tuple[int, int] = (1, 2)
+    ngram_range: tuple[int, int] = (1, 5)
     stop_words: str | None = None
     sublinear_tf: bool = True
     vectorizer: TfidfVectorizer = field(init=False)
