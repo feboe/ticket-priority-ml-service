@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import LabelEncoder
 
 
 @dataclass
@@ -19,6 +20,7 @@ class VectorizedDataset:
     y: pd.Series
     frame: pd.DataFrame
     feature_names: list[str]
+    target_mapping: dict[int, str] | None = None
 
 
 @dataclass
@@ -86,6 +88,27 @@ class TfidfFeatureExtractor:
 
 
 @dataclass
+class TargetEncoder:
+    """Encode string targets into integer class ids."""
+
+    encoder: LabelEncoder = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.encoder = LabelEncoder()
+
+    def fit_transform(self, target: pd.Series) -> pd.Series:
+        encoded = self.encoder.fit_transform(target)
+        return pd.Series(encoded, index=target.index, name=target.name)
+
+    def transform(self, target: pd.Series) -> pd.Series:
+        encoded = self.encoder.transform(target)
+        return pd.Series(encoded, index=target.index, name=target.name)
+
+    def get_mapping(self) -> dict[int, str]:
+        return {idx: label for idx, label in enumerate(self.encoder.classes_)}
+
+
+@dataclass
 class TfidfTargetPreprocessor:
     """Shared TF-IDF preprocessing logic for a single target."""
 
@@ -97,6 +120,7 @@ class TfidfTargetPreprocessor:
     feature_extractor: TfidfFeatureExtractor = field(
         default_factory=TfidfFeatureExtractor
     )
+    target_encoder: TargetEncoder | None = None
 
     def fit_transform(self, frame: pd.DataFrame) -> VectorizedDataset:
         prepared = self._prepare_frame(frame)
@@ -104,11 +128,16 @@ class TfidfTargetPreprocessor:
             prepared[self.text_pipeline.cleaned_column]
         )
         y = prepared[self.target_column].reset_index(drop=True)
+        target_mapping = None
+        if self.target_encoder is not None:
+            y = self.target_encoder.fit_transform(y)
+            target_mapping = self.target_encoder.get_mapping()
         return VectorizedDataset(
             X=X,
             y=y,
             frame=prepared.reset_index(drop=True),
             feature_names=self.feature_extractor.get_feature_names(),
+            target_mapping=target_mapping,
         )
 
     def transform(self, frame: pd.DataFrame) -> csr_matrix:
@@ -143,7 +172,10 @@ class ProductAreaPreprocessor:
     """Preprocessing workflow for product area prediction."""
 
     pipeline: TfidfTargetPreprocessor = field(
-        default_factory=lambda: TfidfTargetPreprocessor(target_column="product_area")
+        default_factory=lambda: TfidfTargetPreprocessor(
+            target_column="product_area",
+            target_encoder=TargetEncoder(),
+        )
     )
 
     def fit_transform(self, frame: pd.DataFrame) -> VectorizedDataset:
@@ -158,7 +190,10 @@ class PriorityPreprocessor:
     """Preprocessing workflow for priority prediction."""
 
     pipeline: TfidfTargetPreprocessor = field(
-        default_factory=lambda: TfidfTargetPreprocessor(target_column="priority")
+        default_factory=lambda: TfidfTargetPreprocessor(
+            target_column="priority",
+            target_encoder=TargetEncoder(),
+        )
     )
 
     def fit_transform(self, frame: pd.DataFrame) -> VectorizedDataset:
