@@ -3,24 +3,18 @@
 from .classification import ClassificationTrainer
 from .preprocessing import (
     PriorityPreprocessor,
-    ProductAreaPreprocessor,
-    ResolutionTimeBucketPreprocessor,
-    ResolutionTimePreprocessor,
+    QueuePreprocessor,
     TargetEncoder,
     TextPreparationPipeline,
     TfidfFeatureExtractor,
     TfidfTargetPreprocessor,
     VectorizedDataset,
 )
-from .regression import RegressionTrainer
 
 __all__ = [
     "ClassificationTrainer",
     "PriorityPreprocessor",
-    "ProductAreaPreprocessor",
-    "RegressionTrainer",
-    "ResolutionTimeBucketPreprocessor",
-    "ResolutionTimePreprocessor",
+    "QueuePreprocessor",
     "TargetEncoder",
     "TextPreparationPipeline",
     "TfidfFeatureExtractor",

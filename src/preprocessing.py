@@ -5,34 +5,19 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass, field
-from typing import Protocol
+from functools import lru_cache
 
 import pandas as pd
 from scipy.sparse import csr_matrix, hstack
-from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS, TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import LabelEncoder
 
 
-EN_STOP_WORDS = frozenset(ENGLISH_STOP_WORDS)
-GERMAN_STOP_WORDS = frozenset(
-    {
-        "aber", "alle", "allem", "allen", "aller", "alles", "als", "also", "am", "an",
-        "ander", "andere", "anderem", "anderen", "anderer", "anderes", "anderm", "andern",
-        "anderr", "anders", "auch", "auf", "aus", "bei", "bin", "bis", "bist", "da",
-        "damit", "dann", "das", "dass", "da?", "dein", "deine", "dem", "den", "der",
-        "des", "dess", "deshalb", "die", "dies", "dieser", "dieses", "doch", "dort",
-        "du", "durch", "ein", "eine", "einem", "einen", "einer", "eines", "er", "es",
-        "euer", "eure", "f?r", "hatte", "hatten", "hattest", "hattet", "hier", "hinter",
-        "ich", "ihr", "ihre", "im", "in", "ist", "ja", "jede", "jedem", "jeden", "jeder",
-        "jedes", "jener", "jenes", "jetzt", "kann", "kannst", "k?nnen", "k?nnt", "machen",
-        "mein", "meine", "mit", "mu?", "mu?t", "musst", "m?ssen", "m??t", "nach", "nachdem",
-        "nein", "nicht", "nun", "oder", "seid", "sein", "seine", "sich", "sie", "sind",
-        "soll", "sollen", "sollst", "sollt", "sonst", "soweit", "sowie", "und", "unser",
-        "unsere", "unter", "vom", "von", "vor", "wann", "warum", "was", "weiter", "weitere",
-        "wenn", "wer", "werde", "werden", "werdet", "weshalb", "wie", "wieder", "wieso",
-        "wir", "wird", "wirst", "wo", "woher", "wohin", "zu", "zum", "zur", "?ber"
-    }
-)
+@lru_cache(maxsize=4)
+def _load_nltk_stop_words(language: str) -> frozenset[str]:
+    from nltk.corpus import stopwords
+
+    return frozenset(stopwords.words(language))
 
 
 @dataclass
@@ -44,16 +29,6 @@ class VectorizedDataset:
     frame: pd.DataFrame
     feature_names: list[str]
     target_mapping: dict[int, str] | None = None
-
-
-class AuxiliaryFeatureExtractor(Protocol):
-    """Interface for sparse auxiliary feature blocks appended after TF-IDF."""
-
-    def fit_transform(self, frame: pd.DataFrame) -> csr_matrix: ...
-
-    def transform(self, frame: pd.DataFrame) -> csr_matrix: ...
-
-    def get_feature_names(self) -> list[str]: ...
 
 
 @dataclass
@@ -78,7 +53,7 @@ class TextPreparationPipeline:
             else pd.Series("", index=df.index, dtype="object")
         )
         body = df[self.body_column].fillna("").astype(str)
-        language = (
+        languages = (
             df[self.language_column].fillna("unknown").astype(str).str.lower()
             if self.language_column in df.columns
             else pd.Series("unknown", index=df.index, dtype="object")
@@ -87,7 +62,10 @@ class TextPreparationPipeline:
 
         df[self.combined_column] = combined_text
         cleaned_text = pd.Series(
-            [self._normalize_text(text, lang) for text, lang in zip(combined_text, language)],
+            [
+                self._normalize_text(text, language)
+                for text, language in zip(combined_text, languages)
+            ],
             index=df.index,
             dtype="object",
         )
@@ -105,18 +83,18 @@ class TextPreparationPipeline:
         text = re.sub(r"[^\w\s]", " ", text)
         text = re.sub(r"_+", " ", text)
         text = re.sub(r"\s+", " ", text).strip()
+
         stop_words = TextPreparationPipeline._get_stop_words(language)
-        if not stop_words:
-            return text
-        tokens = [token for token in text.split() if token not in stop_words]
-        return " ".join(tokens)
+        if stop_words:
+            text = " ".join(token for token in text.split() if token not in stop_words)
+        return text
 
     @staticmethod
     def _get_stop_words(language: str) -> frozenset[str]:
         if language.startswith("de"):
-            return GERMAN_STOP_WORDS
+            return _load_nltk_stop_words("german")
         if language.startswith("en"):
-            return EN_STOP_WORDS
+            return _load_nltk_stop_words("english")
         return frozenset()
 
 
@@ -179,54 +157,6 @@ class LengthFeatureExtractor:
 
 
 @dataclass
-class CategoricalFeatureExtractor:
-    """One-hot encode an arbitrary categorical column as sparse features."""
-
-    column_name: str
-    feature_prefix: str
-    unknown_value: str = "unknown"
-    required: bool = False
-    categories_: list[str] = field(default_factory=list, init=False)
-
-    def fit_transform(self, frame: pd.DataFrame) -> csr_matrix:
-        values = self._prepare_values(frame)
-        if values is None:
-            return self._empty_matrix(len(frame))
-        self.categories_ = sorted(set(values.tolist()) | {self.unknown_value})
-        return self._to_sparse(values)
-
-    def transform(self, frame: pd.DataFrame) -> csr_matrix:
-        values = self._prepare_values(frame)
-        if values is None:
-            return self._empty_matrix(len(frame))
-        if not self.categories_:
-            raise ValueError(
-                f"Categories are unavailable for column '{self.column_name}'. Fit the extractor first."
-            )
-        values = values.where(values.isin(self.categories_), self.unknown_value)
-        return self._to_sparse(values)
-
-    def get_feature_names(self) -> list[str]:
-        return [f"{self.feature_prefix}_{category}" for category in self.categories_]
-
-    def _prepare_values(self, frame: pd.DataFrame) -> pd.Series | None:
-        if self.column_name not in frame.columns:
-            if self.required:
-                raise KeyError(f"Missing categorical column: {self.column_name}")
-            return None
-        return frame[self.column_name].fillna(self.unknown_value).astype(str)
-
-    def _to_sparse(self, values: pd.Series) -> csr_matrix:
-        categorical = pd.Categorical(values, categories=self.categories_)
-        encoded = pd.get_dummies(categorical)
-        return csr_matrix(encoded.to_numpy(dtype=float))
-
-    @staticmethod
-    def _empty_matrix(num_rows: int) -> csr_matrix:
-        return csr_matrix((num_rows, 0), dtype=float)
-
-
-@dataclass
 class TargetEncoder:
     """Encode string targets into integer class ids."""
 
@@ -261,8 +191,7 @@ class OrderedTargetEncoder:
         if categories.isna().any():
             unknown_labels = sorted(set(target[categories.isna()].astype(str)))
             raise ValueError(
-                "Found labels outside the configured order: "
-                + ", ".join(unknown_labels)
+                "Found labels outside the configured order: " + ", ".join(unknown_labels)
             )
         return pd.Series(categories.codes, index=target.index, name=target.name)
 
@@ -281,19 +210,22 @@ class TfidfTargetPreprocessor:
     feature_extractor: TfidfFeatureExtractor = field(
         default_factory=TfidfFeatureExtractor
     )
-    auxiliary_extractors: list[AuxiliaryFeatureExtractor] = field(default_factory=list)
-    target_encoder: TargetEncoder | None = None
+    length_extractor: LengthFeatureExtractor = field(
+        default_factory=LengthFeatureExtractor
+    )
+    target_encoder: TargetEncoder | OrderedTargetEncoder | None = None
 
     def fit_transform(self, frame: pd.DataFrame) -> VectorizedDataset:
         prepared = self._prepare_frame(frame)
-        X = self.feature_extractor.fit_transform(
+        X_text = self.feature_extractor.fit_transform(
             prepared[self.text_pipeline.cleaned_column]
         )
-        feature_names = self.feature_extractor.get_feature_names()
-        for extractor in self.auxiliary_extractors:
-            X_aux = extractor.fit_transform(prepared)
-            X = hstack([X, X_aux], format="csr")
-            feature_names = feature_names + extractor.get_feature_names()
+        X_length = self.length_extractor.fit_transform(prepared)
+        X = hstack([X_text, X_length], format="csr")
+        feature_names = (
+            self.feature_extractor.get_feature_names()
+            + self.length_extractor.get_feature_names()
+        )
 
         y = prepared[self.target_column].reset_index(drop=True)
         target_mapping = None
@@ -310,11 +242,11 @@ class TfidfTargetPreprocessor:
 
     def transform(self, frame: pd.DataFrame) -> csr_matrix:
         prepared = self.text_pipeline.transform(frame)
-        X = self.feature_extractor.transform(prepared[self.text_pipeline.cleaned_column])
-        for extractor in self.auxiliary_extractors:
-            X_aux = extractor.transform(prepared)
-            X = hstack([X, X_aux], format="csr")
-        return X
+        X_text = self.feature_extractor.transform(
+            prepared[self.text_pipeline.cleaned_column]
+        )
+        X_length = self.length_extractor.transform(prepared)
+        return hstack([X_text, X_length], format="csr")
 
     def _prepare_frame(self, frame: pd.DataFrame) -> pd.DataFrame:
         if not isinstance(frame, pd.DataFrame):
@@ -338,14 +270,6 @@ class QueuePreprocessor:
     pipeline: TfidfTargetPreprocessor = field(
         default_factory=lambda: TfidfTargetPreprocessor(
             target_column="queue",
-            auxiliary_extractors=[
-                LengthFeatureExtractor(),
-                CategoricalFeatureExtractor(
-                    column_name="language",
-                    feature_prefix="language",
-                    required=False,
-                ),
-            ],
             target_encoder=TargetEncoder(),
         )
     )
@@ -364,14 +288,6 @@ class PriorityPreprocessor:
     pipeline: TfidfTargetPreprocessor = field(
         default_factory=lambda: TfidfTargetPreprocessor(
             target_column="priority",
-            auxiliary_extractors=[
-                LengthFeatureExtractor(),
-                CategoricalFeatureExtractor(
-                    column_name="language",
-                    feature_prefix="language",
-                    required=False,
-                ),
-            ],
             target_encoder=OrderedTargetEncoder(("low", "medium", "high")),
         )
     )
