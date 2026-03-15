@@ -5,9 +5,11 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from typing import Protocol
 
+import numpy as np
 import pandas as pd
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, hstack
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import LabelEncoder
 
@@ -21,6 +23,16 @@ class VectorizedDataset:
     frame: pd.DataFrame
     feature_names: list[str]
     target_mapping: dict[int, str] | None = None
+
+
+class AuxiliaryFeatureExtractor(Protocol):
+    """Interface for sparse auxiliary feature blocks appended after TF-IDF."""
+
+    def fit_transform(self, frame: pd.DataFrame) -> csr_matrix: ...
+
+    def transform(self, frame: pd.DataFrame) -> csr_matrix: ...
+
+    def get_feature_names(self) -> list[str]: ...
 
 
 @dataclass
@@ -88,6 +100,206 @@ class TfidfFeatureExtractor:
 
 
 @dataclass
+class LengthFeatureExtractor:
+    """Create a single numeric feature from cleaned message length."""
+
+    length_column: str = "initial_message_length"
+    feature_name: str = "initial_message_length"
+    scale_: float = field(default=1.0, init=False)
+
+    def fit_transform(self, frame: pd.DataFrame) -> csr_matrix:
+        values = self._get_values(frame)
+        self.scale_ = max(float(values.max()), 1.0)
+        return csr_matrix((values / self.scale_).to_numpy().reshape(-1, 1))
+
+    def transform(self, frame: pd.DataFrame) -> csr_matrix:
+        values = self._get_values(frame)
+        return csr_matrix((values / self.scale_).to_numpy().reshape(-1, 1))
+
+    def get_feature_names(self) -> list[str]:
+        return [self.feature_name]
+
+    def _get_values(self, frame: pd.DataFrame) -> pd.Series:
+        if self.length_column not in frame.columns:
+            raise KeyError(f"Missing length column: {self.length_column}")
+        return frame[self.length_column].astype(float)
+
+
+@dataclass
+class PlatformFeatureExtractor:
+    """One-hot encode the platform column as sparse features."""
+
+    platform_column: str = "platform"
+    unknown_value: str = "unknown"
+    categories_: list[str] = field(default_factory=list, init=False)
+
+    def fit_transform(self, frame: pd.DataFrame) -> csr_matrix:
+        values = self._prepare_values(frame)
+        self.categories_ = sorted(set(values.tolist()) | {self.unknown_value})
+        return self._to_sparse(values)
+
+    def transform(self, frame: pd.DataFrame) -> csr_matrix:
+        if not self.categories_:
+            raise ValueError(
+                "Platform categories are unavailable. Fit the extractor first."
+            )
+        values = self._prepare_values(frame)
+        values = values.where(values.isin(self.categories_), self.unknown_value)
+        return self._to_sparse(values)
+
+    def get_feature_names(self) -> list[str]:
+        return [f"platform_{category}" for category in self.categories_]
+
+    def _prepare_values(self, frame: pd.DataFrame) -> pd.Series:
+        if self.platform_column not in frame.columns:
+            raise KeyError(f"Missing platform column: {self.platform_column}")
+        return frame[self.platform_column].fillna(self.unknown_value).astype(str)
+
+    def _to_sparse(self, values: pd.Series) -> csr_matrix:
+        categorical = pd.Categorical(values, categories=self.categories_)
+        encoded = pd.get_dummies(categorical)
+        return csr_matrix(encoded.to_numpy(dtype=float))
+
+
+@dataclass
+class ChannelFeatureExtractor:
+    """One-hot encode the channel column as sparse features."""
+
+    channel_column: str = "channel"
+    unknown_value: str = "unknown"
+    categories_: list[str] = field(default_factory=list, init=False)
+
+    def fit_transform(self, frame: pd.DataFrame) -> csr_matrix:
+        values = self._prepare_values(frame)
+        self.categories_ = sorted(set(values.tolist()) | {self.unknown_value})
+        return self._to_sparse(values)
+
+    def transform(self, frame: pd.DataFrame) -> csr_matrix:
+        if not self.categories_:
+            raise ValueError(
+                "Channel categories are unavailable. Fit the extractor first."
+            )
+        values = self._prepare_values(frame)
+        values = values.where(values.isin(self.categories_), self.unknown_value)
+        return self._to_sparse(values)
+
+    def get_feature_names(self) -> list[str]:
+        return [f"channel_{category}" for category in self.categories_]
+
+    def _prepare_values(self, frame: pd.DataFrame) -> pd.Series:
+        if self.channel_column not in frame.columns:
+            raise KeyError(f"Missing channel column: {self.channel_column}")
+        return frame[self.channel_column].fillna(self.unknown_value).astype(str)
+
+    def _to_sparse(self, values: pd.Series) -> csr_matrix:
+        categorical = pd.Categorical(values, categories=self.categories_)
+        encoded = pd.get_dummies(categorical)
+        return csr_matrix(encoded.to_numpy(dtype=float))
+
+
+@dataclass
+class CustomerSegmentFeatureExtractor:
+    """One-hot encode the customer segment column as sparse features."""
+
+    segment_column: str = "customer_segment"
+    unknown_value: str = "unknown"
+    categories_: list[str] = field(default_factory=list, init=False)
+
+    def fit_transform(self, frame: pd.DataFrame) -> csr_matrix:
+        values = self._prepare_values(frame)
+        self.categories_ = sorted(set(values.tolist()) | {self.unknown_value})
+        return self._to_sparse(values)
+
+    def transform(self, frame: pd.DataFrame) -> csr_matrix:
+        if not self.categories_:
+            raise ValueError(
+                "Customer segment categories are unavailable. Fit the extractor first."
+            )
+        values = self._prepare_values(frame)
+        values = values.where(values.isin(self.categories_), self.unknown_value)
+        return self._to_sparse(values)
+
+    def get_feature_names(self) -> list[str]:
+        return [f"customer_segment_{category}" for category in self.categories_]
+
+    def _prepare_values(self, frame: pd.DataFrame) -> pd.Series:
+        if self.segment_column not in frame.columns:
+            raise KeyError(f"Missing customer segment column: {self.segment_column}")
+        return frame[self.segment_column].fillna(self.unknown_value).astype(str)
+
+    def _to_sparse(self, values: pd.Series) -> csr_matrix:
+        categorical = pd.Categorical(values, categories=self.categories_)
+        encoded = pd.get_dummies(categorical)
+        return csr_matrix(encoded.to_numpy(dtype=float))
+
+
+@dataclass
+class RegionFilledFeatureExtractor:
+    """One-hot encode a filled region feature as sparse columns."""
+
+    region_filled_column: str = "region_filled"
+    region_column: str = "region"
+    unknown_value: str = "unknown"
+    categories_: list[str] = field(default_factory=list, init=False)
+
+    def fit_transform(self, frame: pd.DataFrame) -> csr_matrix:
+        values = self._prepare_values(frame)
+        self.categories_ = sorted(set(values.tolist()) | {self.unknown_value})
+        return self._to_sparse(values)
+
+    def transform(self, frame: pd.DataFrame) -> csr_matrix:
+        if not self.categories_:
+            raise ValueError(
+                "Region categories are unavailable. Fit the extractor first."
+            )
+        values = self._prepare_values(frame)
+        values = values.where(values.isin(self.categories_), self.unknown_value)
+        return self._to_sparse(values)
+
+    def get_feature_names(self) -> list[str]:
+        return [f"region_filled_{category}" for category in self.categories_]
+
+    def _prepare_values(self, frame: pd.DataFrame) -> pd.Series:
+        if self.region_filled_column in frame.columns:
+            values = frame[self.region_filled_column]
+        elif self.region_column in frame.columns:
+            values = frame[self.region_column]
+        else:
+            raise KeyError(
+                f"Missing region columns: {self.region_filled_column} or {self.region_column}"
+            )
+        return values.fillna(self.unknown_value).astype(str)
+
+    def _to_sparse(self, values: pd.Series) -> csr_matrix:
+        categorical = pd.Categorical(values, categories=self.categories_)
+        encoded = pd.get_dummies(categorical)
+        return csr_matrix(encoded.to_numpy(dtype=float))
+
+
+@dataclass
+class HasAttachmentFeatureExtractor:
+    """Create a single numeric feature from the has_attachment column."""
+
+    attachment_column: str = "has_attachment"
+    feature_name: str = "has_attachment"
+
+    def fit_transform(self, frame: pd.DataFrame) -> csr_matrix:
+        return self._to_sparse(frame)
+
+    def transform(self, frame: pd.DataFrame) -> csr_matrix:
+        return self._to_sparse(frame)
+
+    def get_feature_names(self) -> list[str]:
+        return [self.feature_name]
+
+    def _to_sparse(self, frame: pd.DataFrame) -> csr_matrix:
+        if self.attachment_column not in frame.columns:
+            raise KeyError(f"Missing attachment column: {self.attachment_column}")
+        values = pd.to_numeric(frame[self.attachment_column], errors="coerce").fillna(0.0)
+        return csr_matrix(values.to_numpy(dtype=float).reshape(-1, 1))
+
+
+@dataclass
 class TargetEncoder:
     """Encode string targets into integer class ids."""
 
@@ -120,6 +332,7 @@ class TfidfTargetPreprocessor:
     feature_extractor: TfidfFeatureExtractor = field(
         default_factory=TfidfFeatureExtractor
     )
+    auxiliary_extractors: list[AuxiliaryFeatureExtractor] = field(default_factory=list)
     target_encoder: TargetEncoder | None = None
 
     def fit_transform(self, frame: pd.DataFrame) -> VectorizedDataset:
@@ -127,6 +340,12 @@ class TfidfTargetPreprocessor:
         X = self.feature_extractor.fit_transform(
             prepared[self.text_pipeline.cleaned_column]
         )
+        feature_names = self.feature_extractor.get_feature_names()
+        for extractor in self.auxiliary_extractors:
+            X_aux = extractor.fit_transform(prepared)
+            X = hstack([X, X_aux], format="csr")
+            feature_names = feature_names + extractor.get_feature_names()
+
         y = prepared[self.target_column].reset_index(drop=True)
         target_mapping = None
         if self.target_encoder is not None:
@@ -136,15 +355,17 @@ class TfidfTargetPreprocessor:
             X=X,
             y=y,
             frame=prepared.reset_index(drop=True),
-            feature_names=self.feature_extractor.get_feature_names(),
+            feature_names=feature_names,
             target_mapping=target_mapping,
         )
 
     def transform(self, frame: pd.DataFrame) -> csr_matrix:
         prepared = self.text_pipeline.transform(frame)
-        return self.feature_extractor.transform(
-            prepared[self.text_pipeline.cleaned_column]
-        )
+        X = self.feature_extractor.transform(prepared[self.text_pipeline.cleaned_column])
+        for extractor in self.auxiliary_extractors:
+            X_aux = extractor.transform(prepared)
+            X = hstack([X, X_aux], format="csr")
+        return X
 
     def _prepare_frame(self, frame: pd.DataFrame) -> pd.DataFrame:
         if not isinstance(frame, pd.DataFrame):
@@ -174,6 +395,9 @@ class ProductAreaPreprocessor:
     pipeline: TfidfTargetPreprocessor = field(
         default_factory=lambda: TfidfTargetPreprocessor(
             target_column="product_area",
+            auxiliary_extractors=[
+                LengthFeatureExtractor(),
+            ],
             target_encoder=TargetEncoder(),
         )
     )
@@ -192,6 +416,12 @@ class PriorityPreprocessor:
     pipeline: TfidfTargetPreprocessor = field(
         default_factory=lambda: TfidfTargetPreprocessor(
             target_column="priority",
+            auxiliary_extractors=[
+                LengthFeatureExtractor(),
+                PlatformFeatureExtractor(),
+                CustomerSegmentFeatureExtractor(),
+                RegionFilledFeatureExtractor(),
+            ],
             target_encoder=TargetEncoder(),
         )
     )
@@ -211,11 +441,32 @@ class ResolutionTimePreprocessor:
         default_factory=lambda: TfidfTargetPreprocessor(
             target_column="resolution_time_hours",
             numeric_target=True,
+            auxiliary_extractors=[
+                LengthFeatureExtractor(),
+            ],
         )
     )
 
     def fit_transform(self, frame: pd.DataFrame) -> VectorizedDataset:
-        return self.pipeline.fit_transform(frame)
+        data = self.pipeline.fit_transform(frame)
+        transformed_y = pd.Series(
+            np.log1p(data.y.to_numpy(dtype=float)),
+            index=data.y.index,
+            name=data.y.name,
+        )
+        return VectorizedDataset(
+            X=data.X,
+            y=transformed_y,
+            frame=data.frame,
+            feature_names=data.feature_names,
+            target_mapping=data.target_mapping,
+        )
 
     def transform(self, frame: pd.DataFrame) -> csr_matrix:
         return self.pipeline.transform(frame)
+
+    @staticmethod
+    def inverse_transform_target(values: pd.Series | np.ndarray) -> pd.Series | np.ndarray:
+        if isinstance(values, pd.Series):
+            return pd.Series(np.expm1(values.to_numpy(dtype=float)), index=values.index, name=values.name)
+        return np.expm1(np.asarray(values, dtype=float))

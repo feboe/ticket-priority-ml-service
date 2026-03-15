@@ -18,6 +18,11 @@ PREPROCESSOR_FACTORY = {
     "priority": PriorityPreprocessor,
 }
 
+CLASS_WEIGHT_BY_TASK = {
+    "product_area": None,
+    "priority": "balanced",
+}
+
 
 @dataclass
 class ClassificationTrainer:
@@ -44,8 +49,10 @@ class ClassificationTrainer:
             )
 
         self.model = LogisticRegression(
+            C=1.0,
             max_iter=1000,
             random_state=self.random_state,
+            class_weight=CLASS_WEIGHT_BY_TASK[self.task_name],
         )
         self.preprocessor = PREPROCESSOR_FACTORY[self.task_name]()
 
@@ -72,6 +79,7 @@ class ClassificationTrainer:
             "test_rows": len(split.test_df),
             "test_size": self.test_size,
             "random_state": self.random_state,
+            "class_weight": CLASS_WEIGHT_BY_TASK[self.task_name],
         }
         return self
 
