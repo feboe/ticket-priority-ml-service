@@ -466,7 +466,66 @@ class ResolutionTimePreprocessor:
         return self.pipeline.transform(frame)
 
     @staticmethod
-    def inverse_transform_target(values: pd.Series | np.ndarray) -> pd.Series | np.ndarray:
+    def inverse_transform_target(
+        values: pd.Series | np.ndarray,
+    ) -> pd.Series | np.ndarray:
         if isinstance(values, pd.Series):
-            return pd.Series(np.expm1(values.to_numpy(dtype=float)), index=values.index, name=values.name)
+            return pd.Series(
+                np.expm1(values.to_numpy(dtype=float)),
+                index=values.index,
+                name=values.name,
+            )
         return np.expm1(np.asarray(values, dtype=float))
+
+
+RESOLUTION_TIME_BUCKET_LABELS = [
+    "< 4h",
+    "4-24h",
+    "1-3 Tage",
+    "> 3 Tage",
+]
+
+
+@dataclass
+class ResolutionTimeBucketPreprocessor:
+    """Preprocessing workflow for resolution time bucket classification."""
+
+    pipeline: TfidfTargetPreprocessor = field(
+        default_factory=lambda: TfidfTargetPreprocessor(
+            target_column="resolution_time_bucket",
+            auxiliary_extractors=[
+                LengthFeatureExtractor(),
+            ],
+            target_encoder=TargetEncoder(),
+        )
+    )
+
+    def fit_transform(self, frame: pd.DataFrame) -> VectorizedDataset:
+        prepared = self.prepare_training_frame(frame)
+        return self.pipeline.fit_transform(prepared)
+
+    def transform(self, frame: pd.DataFrame) -> csr_matrix:
+        return self.pipeline.transform(frame)
+
+    def prepare_training_frame(self, frame: pd.DataFrame) -> pd.DataFrame:
+        prepared = self._with_bucket_target(frame)
+        return prepared[prepared["resolution_time_bucket"].notna()].copy()
+
+    @staticmethod
+    def _bucketize_resolution_time(values: pd.Series) -> pd.Series:
+        numeric = pd.to_numeric(values, errors="coerce")
+        buckets = pd.Series(index=values.index, dtype="object")
+        buckets.loc[numeric < 4] = "< 4h"
+        buckets.loc[(numeric >= 4) & (numeric < 24)] = "4-24h"
+        buckets.loc[(numeric >= 24) & (numeric <= 72)] = "1-3 Tage"
+        buckets.loc[numeric > 72] = "> 3 Tage"
+        return buckets
+
+    def _with_bucket_target(self, frame: pd.DataFrame) -> pd.DataFrame:
+        if "resolution_time_hours" not in frame.columns:
+            raise KeyError("Missing target column: resolution_time_hours")
+        df = frame.copy()
+        df["resolution_time_bucket"] = self._bucketize_resolution_time(
+            df["resolution_time_hours"]
+        )
+        return df

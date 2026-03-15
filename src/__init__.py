@@ -4,6 +4,7 @@ from .classification import ClassificationTrainer
 from .preprocessing import (
     PriorityPreprocessor,
     ProductAreaPreprocessor,
+    ResolutionTimeBucketPreprocessor,
     ResolutionTimePreprocessor,
     TargetEncoder,
     TextPreparationPipeline,
@@ -18,6 +19,7 @@ __all__ = [
     "PriorityPreprocessor",
     "ProductAreaPreprocessor",
     "RegressionTrainer",
+    "ResolutionTimeBucketPreprocessor",
     "ResolutionTimePreprocessor",
     "TargetEncoder",
     "TextPreparationPipeline",

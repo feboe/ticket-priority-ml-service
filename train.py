@@ -8,7 +8,6 @@ from pathlib import Path
 import pandas as pd
 
 from src.classification import ClassificationTrainer
-from src.regression import RegressionTrainer
 
 
 def parse_args() -> argparse.Namespace:
@@ -28,12 +27,12 @@ def main() -> None:
 
     product_area_trainer = ClassificationTrainer(task_name="product_area")
     priority_trainer = ClassificationTrainer(task_name="priority")
-    regression_trainer = RegressionTrainer()
+    resolution_time_trainer = ClassificationTrainer(task_name="resolution_time_bucket")
 
     metrics = {
         "product_area": product_area_trainer.evaluate(df),
         "priority": priority_trainer.evaluate(df),
-        "resolution_time_hours": regression_trainer.evaluate(df),
+        "resolution_time_bucket": resolution_time_trainer.evaluate(df),
     }
 
     for task_name, task_metrics in metrics.items():

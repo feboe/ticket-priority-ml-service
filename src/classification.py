@@ -9,18 +9,24 @@ from scipy.sparse import csr_matrix
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score
 
-from .preprocessing import PriorityPreprocessor, ProductAreaPreprocessor
+from .preprocessing import (
+    PriorityPreprocessor,
+    ProductAreaPreprocessor,
+    ResolutionTimeBucketPreprocessor,
+)
 from .training_utils import make_holdout_split
 
 
 PREPROCESSOR_FACTORY = {
     "product_area": ProductAreaPreprocessor,
     "priority": PriorityPreprocessor,
+    "resolution_time_bucket": ResolutionTimeBucketPreprocessor,
 }
 
 CLASS_WEIGHT_BY_TASK = {
     "product_area": None,
     "priority": "balanced",
+    "resolution_time_bucket": None,
 }
 
 
@@ -32,7 +38,9 @@ class ClassificationTrainer:
     random_state: int = 42
     test_size: float = 0.2
     model: LogisticRegression = field(init=False)
-    preprocessor: ProductAreaPreprocessor | PriorityPreprocessor = field(init=False)
+    preprocessor: (
+        ProductAreaPreprocessor | PriorityPreprocessor | ResolutionTimeBucketPreprocessor
+    ) = field(init=False)
     feature_names_: list[str] = field(default_factory=list, init=False)
     target_mapping_: dict[int, str] = field(default_factory=dict, init=False)
     split_metadata_: dict[str, int | float | str] = field(
@@ -57,9 +65,11 @@ class ClassificationTrainer:
         self.preprocessor = PREPROCESSOR_FACTORY[self.task_name]()
 
     def fit(self, df: pd.DataFrame) -> ClassificationTrainer:
+        prepared_df = self._prepare_training_frame(df)
+        target_column = self.preprocessor.pipeline.target_column
         split = make_holdout_split(
-            frame=df,
-            target_column=self.task_name,
+            frame=prepared_df,
+            target_column=target_column,
             test_size=self.test_size,
             random_state=self.random_state,
             stratify=True,
@@ -69,7 +79,7 @@ class ClassificationTrainer:
 
         self._test_X = self.preprocessor.transform(split.test_df)
         self._test_y = self.preprocessor.pipeline.target_encoder.transform(
-            split.test_df[self.task_name].reset_index(drop=True)
+            split.test_df[target_column].reset_index(drop=True)
         )
         self.feature_names_ = train_data.feature_names
         self.target_mapping_ = train_data.target_mapping or {}
@@ -95,6 +105,12 @@ class ClassificationTrainer:
             "accuracy": float(accuracy_score(truth, predictions)),
             "macro_f1": float(f1_score(truth, predictions, average="macro")),
         }
+
+    def _prepare_training_frame(self, df: pd.DataFrame) -> pd.DataFrame:
+        prepare_method = getattr(self.preprocessor, "prepare_training_frame", None)
+        if callable(prepare_method):
+            return prepare_method(df)
+        return df
 
     def _predict_encoded(self, df: pd.DataFrame) -> pd.Series:
         X = self.preprocessor.transform(df)
