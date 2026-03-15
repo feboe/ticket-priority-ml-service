@@ -126,6 +126,77 @@ class LengthFeatureExtractor:
 
 
 @dataclass
+class PriorityKeywordFeatureExtractor:
+    """Create small binary text features for priority-relevant phrases."""
+
+    text_column: str = "initial_message_clean"
+    patterns: tuple[tuple[str, str], ...] = (
+        ("has_account_locked", r"\baccount locked\b"),
+        ("has_password_incorrect", r"\bpassword incorrect\b"),
+        ("has_failed_attempts", r"\bfailed attempts\b"),
+        ("has_cannot", r"\bcannot\b"),
+        ("has_error", r"\berror\b"),
+        ("has_crashing", r"\bcrashing\b"),
+    )
+
+    def fit_transform(self, frame: pd.DataFrame) -> csr_matrix:
+        return self._to_sparse(frame)
+
+    def transform(self, frame: pd.DataFrame) -> csr_matrix:
+        return self._to_sparse(frame)
+
+    def get_feature_names(self) -> list[str]:
+        return [name for name, _ in self.patterns]
+
+    def _to_sparse(self, frame: pd.DataFrame) -> csr_matrix:
+        if self.text_column not in frame.columns:
+            raise KeyError(f"Missing text column: {self.text_column}")
+        text = frame[self.text_column].fillna("").astype(str)
+        data = {
+            name: text.str.contains(pattern, regex=True).astype(float)
+            for name, pattern in self.patterns
+        }
+        features = pd.DataFrame(data, index=frame.index)
+        return csr_matrix(features.to_numpy(dtype=float))
+
+
+@dataclass
+class ProductAreaKeywordFeatureExtractor:
+    """Create coarse binary keyword features for product area terms."""
+
+    text_column: str = "initial_message_clean"
+    patterns: tuple[tuple[str, str], ...] = (
+        ("has_login_terms", r"\bauth\b|\blogin\b|\blog in\b|\bpassword\b|\baccount locked\b"),
+        ("has_billing_terms", r"\bbilling\b|\binvoice\b|\bcharge\w*\b|\brefund\w*\b|\bpayment\w*\b"),
+        ("has_api_terms", r"\bapi\b|\bintegration\b"),
+        ("has_dashboard_terms", r"\banalytics\b|\bdashboard\b|\breport\w*\b"),
+        ("has_mobile_terms", r"\bmobile\b|\bapp\b|\bandroid\b|\bios\b"),
+        ("has_export_terms", r"\bexport\b|\bcsv\b|\bdownload\b"),
+        ("has_notification_terms", r"\bnotification\w*\b|\balert\w*\b|\bemail\b"),
+    )
+
+    def fit_transform(self, frame: pd.DataFrame) -> csr_matrix:
+        return self._to_sparse(frame)
+
+    def transform(self, frame: pd.DataFrame) -> csr_matrix:
+        return self._to_sparse(frame)
+
+    def get_feature_names(self) -> list[str]:
+        return [name for name, _ in self.patterns]
+
+    def _to_sparse(self, frame: pd.DataFrame) -> csr_matrix:
+        if self.text_column not in frame.columns:
+            raise KeyError(f"Missing text column: {self.text_column}")
+        text = frame[self.text_column].fillna("").astype(str)
+        data = {
+            name: text.str.contains(pattern, regex=True).astype(float)
+            for name, pattern in self.patterns
+        }
+        features = pd.DataFrame(data, index=frame.index)
+        return csr_matrix(features.to_numpy(dtype=float))
+
+
+@dataclass
 class PlatformFeatureExtractor:
     """One-hot encode the platform column as sparse features."""
 
@@ -397,6 +468,7 @@ class ProductAreaPreprocessor:
             target_column="product_area",
             auxiliary_extractors=[
                 LengthFeatureExtractor(),
+                ProductAreaKeywordFeatureExtractor(),
             ],
             target_encoder=TargetEncoder(),
         )
@@ -421,6 +493,7 @@ class PriorityPreprocessor:
                 PlatformFeatureExtractor(),
                 CustomerSegmentFeatureExtractor(),
                 RegionFilledFeatureExtractor(),
+                PriorityKeywordFeatureExtractor(),
             ],
             target_encoder=TargetEncoder(),
         )
@@ -493,9 +566,7 @@ class ResolutionTimeBucketPreprocessor:
     pipeline: TfidfTargetPreprocessor = field(
         default_factory=lambda: TfidfTargetPreprocessor(
             target_column="resolution_time_bucket",
-            auxiliary_extractors=[
-                LengthFeatureExtractor(),
-            ],
+            auxiliary_extractors=[LengthFeatureExtractor()],
             target_encoder=TargetEncoder(),
         )
     )
