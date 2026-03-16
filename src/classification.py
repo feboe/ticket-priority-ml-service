@@ -8,6 +8,7 @@ from typing import Any
 import pandas as pd
 from scipy.sparse import csr_matrix
 from sklearn.linear_model import LogisticRegression
+from sklearn.svm import LinearSVC
 
 from .preprocessing import PriorityPreprocessor, QueuePreprocessor
 from .training_utils import HoldoutSplit, make_holdout_split
@@ -18,14 +19,27 @@ PREPROCESSOR_FACTORY = {
     "priority": PriorityPreprocessor,
 }
 
+SUPPORTED_ALGORITHMS = ("logreg", "linear_svc")
+
 CLASS_WEIGHT_BY_TASK = {
     "queue": "balanced",
     "priority": "balanced",
 }
 
-C_BY_TASK = {
-    "queue": 1.0,
-    "priority": 2.0,
+C_BY_ALGORITHM_AND_TASK = {
+    "logreg": {
+        "queue": 2.0,
+        "priority": 2.0,
+    },
+    "linear_svc": {
+        "queue": 2.0,
+        "priority": 2.0,
+    },
+}
+
+MAX_ITER_BY_ALGORITHM = {
+    "logreg": 2000,
+    "linear_svc": 5000,
 }
 
 
@@ -34,9 +48,10 @@ class ClassificationTrainer:
     """Reusable trainer for queue and priority classification."""
 
     task_name: str
+    algorithm: str = "logreg"
     random_state: int = 42
     test_size: float = 0.2
-    model: LogisticRegression = field(init=False)
+    model: LogisticRegression | LinearSVC = field(init=False)
     preprocessor: QueuePreprocessor | PriorityPreprocessor = field(init=False)
     feature_names_: list[str] = field(default_factory=list, init=False)
     target_mapping_: dict[int, str] = field(default_factory=dict, init=False)
@@ -50,13 +65,13 @@ class ClassificationTrainer:
                 f"Unsupported classification task '{self.task_name}'. "
                 f"Choose one of: {', '.join(PREPROCESSOR_FACTORY)}."
             )
+        if self.algorithm not in SUPPORTED_ALGORITHMS:
+            raise ValueError(
+                f"Unsupported algorithm '{self.algorithm}'. "
+                f"Choose one of: {', '.join(SUPPORTED_ALGORITHMS)}."
+            )
 
-        self.model = LogisticRegression(
-            C=C_BY_TASK[self.task_name],
-            max_iter=2000,
-            random_state=self.random_state,
-            class_weight=CLASS_WEIGHT_BY_TASK[self.task_name],
-        )
+        self.model = self._build_model()
         self.preprocessor = PREPROCESSOR_FACTORY[self.task_name]()
 
     def fit(self, df: pd.DataFrame) -> ClassificationTrainer:
@@ -110,13 +125,16 @@ class ClassificationTrainer:
         return self.preprocessor.pipeline.target_column
 
     def get_model_config(self) -> dict[str, Any]:
-        return {
-            "model_family": "LogisticRegression",
+        config = {
+            "algorithm": self.algorithm,
+            "model_family": type(self.model).__name__,
             "C": self.model.C,
             "class_weight": self.model.class_weight,
             "max_iter": self.model.max_iter,
-            "solver": self.model.solver,
         }
+        if hasattr(self.model, "solver"):
+            config["solver"] = self.model.solver
+        return config
 
     def get_preprocessing_config(self) -> dict[str, Any]:
         feature_extractor = self.preprocessor.pipeline.feature_extractor
@@ -128,6 +146,27 @@ class ClassificationTrainer:
             "sublinear_tf": feature_extractor.sublinear_tf,
             "length_feature_enabled": True,
         }
+
+    def _build_model(self) -> LogisticRegression | LinearSVC:
+        c_value = C_BY_ALGORITHM_AND_TASK[self.algorithm][self.task_name]
+        class_weight = CLASS_WEIGHT_BY_TASK[self.task_name]
+        max_iter = MAX_ITER_BY_ALGORITHM[self.algorithm]
+
+        if self.algorithm == "logreg":
+            return LogisticRegression(
+                C=c_value,
+                max_iter=max_iter,
+                random_state=self.random_state,
+                class_weight=class_weight,
+            )
+        if self.algorithm == "linear_svc":
+            return LinearSVC(
+                C=c_value,
+                class_weight=class_weight,
+                max_iter=max_iter,
+                random_state=self.random_state,
+            )
+        raise ValueError(f"Unsupported algorithm '{self.algorithm}'.")
 
     def _predict_current_split(self) -> pd.Series:
         if self._test_predictions is None:

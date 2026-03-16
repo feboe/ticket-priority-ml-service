@@ -8,7 +8,7 @@ from typing import Any
 
 import pandas as pd
 
-from src.classification import ClassificationTrainer
+from src.classification import ClassificationTrainer, SUPPORTED_ALGORITHMS
 from src.evaluation import evaluate_fold, summarize_cv_results
 from src.tracking import (
     build_base_run_name,
@@ -49,6 +49,13 @@ def parse_args() -> argparse.Namespace:
         help="Random seed used when shuffling folds.",
     )
     parser.add_argument(
+        "--algorithm",
+        type=str,
+        choices=SUPPORTED_ALGORITHMS,
+        default="logreg",
+        help="Classifier algorithm used for both tasks.",
+    )
+    parser.add_argument(
         "--tracking-uri",
         type=str,
         default="file:./mlruns",
@@ -86,12 +93,17 @@ def evaluate_task(
     task_name: str,
     folds: list,
     random_state: int,
+    algorithm: str,
 ) -> dict[str, Any]:
     fold_evaluations = []
     trainer_config: dict[str, Any] | None = None
 
     for fold_index, split in enumerate(folds, start=1):
-        trainer = ClassificationTrainer(task_name=task_name, random_state=random_state)
+        trainer = ClassificationTrainer(
+            task_name=task_name,
+            algorithm=algorithm,
+            random_state=random_state,
+        )
         trainer.fit_on_split(split)
 
         fold_evaluations.append(
@@ -158,6 +170,7 @@ def build_shared_tracking_payload(
         "cv_folds": args.cv_folds,
         "random_state": args.random_state,
         "stratify_columns": list(STRATIFY_TARGET_COLUMNS),
+        "algorithm": args.algorithm,
     }
     tags = {
         "run_group": args.run_group,
@@ -170,7 +183,6 @@ def build_shared_tracking_payload(
 def build_task_tracking_payload(
     *,
     task_name: str,
-    base_run_name: str,
     task_results: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     task_config = task_results["task_config"]
@@ -225,13 +237,17 @@ def main() -> None:
 
     configure_tracking(args.tracking_uri, args.experiment_name)
     for task_name in TASK_NAMES:
-        task_results = evaluate_task(task_name, folds, args.random_state)
+        task_results = evaluate_task(
+            task_name=task_name,
+            folds=folds,
+            random_state=args.random_state,
+            algorithm=args.algorithm,
+        )
         print_task_results(task_name, task_results)
 
-        run_name = f"{resolved_base_run_name}::{task_name}"
+        run_name = f"{resolved_base_run_name}::{args.algorithm}::{task_name}"
         task_params, task_tags, run_config = build_task_tracking_payload(
             task_name=task_name,
-            base_run_name=resolved_base_run_name,
             task_results=task_results,
         )
         task_tags = {**shared_tags, **task_tags}
@@ -249,6 +265,7 @@ def main() -> None:
                 "notes": args.notes,
                 "cv_folds": args.cv_folds,
                 "random_state": args.random_state,
+                "algorithm": args.algorithm,
                 "stratify_columns": list(STRATIFY_TARGET_COLUMNS),
             },
         }
