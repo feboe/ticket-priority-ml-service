@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 import pandas as pd
 from scipy.sparse import csr_matrix
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, f1_score
 
 from .preprocessing import PriorityPreprocessor, QueuePreprocessor
 from .training_utils import HoldoutSplit, make_holdout_split
@@ -40,11 +40,9 @@ class ClassificationTrainer:
     preprocessor: QueuePreprocessor | PriorityPreprocessor = field(init=False)
     feature_names_: list[str] = field(default_factory=list, init=False)
     target_mapping_: dict[int, str] = field(default_factory=dict, init=False)
-    split_metadata_: dict[str, int | float | str] = field(
-        default_factory=dict, init=False
-    )
     _test_X: csr_matrix | None = field(default=None, init=False, repr=False)
     _test_y: pd.Series | None = field(default=None, init=False, repr=False)
+    _test_predictions: pd.Series | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.task_name not in PREPROCESSOR_FACTORY:
@@ -81,16 +79,9 @@ class ClassificationTrainer:
         self._test_y = self.preprocessor.pipeline.target_encoder.transform(
             split.test_df[target_column].reset_index(drop=True)
         )
+        self._test_predictions = None
         self.feature_names_ = train_data.feature_names
         self.target_mapping_ = train_data.target_mapping or {}
-        self.split_metadata_ = {
-            "task_name": self.task_name,
-            "train_rows": len(split.train_df),
-            "test_rows": len(split.test_df),
-            "test_size": len(split.test_df) / max(len(split.train_df) + len(split.test_df), 1),
-            "random_state": self.random_state,
-            "class_weight": str(CLASS_WEIGHT_BY_TASK[self.task_name]),
-        }
         return self
 
     def predict(self, df: pd.DataFrame) -> pd.Series:
@@ -103,21 +94,48 @@ class ClassificationTrainer:
         )
         return pd.Series(decoded, name=self.task_name)
 
-    def evaluate(self, df: pd.DataFrame) -> dict[str, float]:
-        self.fit(df)
-        return self._score_current_split()
+    def get_test_truth(self) -> pd.Series:
+        return self._require_test_y().copy()
 
-    def evaluate_split(self, split: HoldoutSplit) -> dict[str, float]:
-        self.fit_on_split(split)
-        return self._score_current_split()
+    def get_test_predictions(self) -> pd.Series:
+        return self._predict_current_split().copy()
 
-    def _score_current_split(self) -> dict[str, float]:
-        predictions = self.model.predict(self._require_test_X())
-        truth = self._require_test_y()
+    def get_label_order(self) -> list[int]:
+        return sorted(self.target_mapping_)
+
+    def get_label_names(self) -> list[str]:
+        return [self.target_mapping_[label_id] for label_id in self.get_label_order()]
+
+    def get_target_column(self) -> str:
+        return self.preprocessor.pipeline.target_column
+
+    def get_model_config(self) -> dict[str, Any]:
         return {
-            "accuracy": float(accuracy_score(truth, predictions)),
-            "macro_f1": float(f1_score(truth, predictions, average="macro")),
+            "model_family": "LogisticRegression",
+            "C": self.model.C,
+            "class_weight": self.model.class_weight,
+            "max_iter": self.model.max_iter,
+            "solver": self.model.solver,
         }
+
+    def get_preprocessing_config(self) -> dict[str, Any]:
+        feature_extractor = self.preprocessor.pipeline.feature_extractor
+        return {
+            "min_df": feature_extractor.min_df,
+            "max_df": feature_extractor.max_df,
+            "ngram_min": feature_extractor.ngram_range[0],
+            "ngram_max": feature_extractor.ngram_range[1],
+            "sublinear_tf": feature_extractor.sublinear_tf,
+            "length_feature_enabled": True,
+        }
+
+    def _predict_current_split(self) -> pd.Series:
+        if self._test_predictions is None:
+            self._test_predictions = pd.Series(
+                self.model.predict(self._require_test_X()),
+                name=f"{self.task_name}_prediction",
+            )
+        return self._test_predictions
 
     def _require_test_X(self) -> csr_matrix:
         if self._test_X is None:

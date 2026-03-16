@@ -57,6 +57,8 @@ Desktop.ini
 # Project data and local artifacts
 data/
 notebooks/
+tests/
 artifacts/
 models/
 outputs/
+mlruns/

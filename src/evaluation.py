@@ -1,0 +1,264 @@
+"""Evaluation helpers for fold and cross-validation reporting."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Sequence
+
+import pandas as pd
+from sklearn.metrics import (
+    accuracy_score,
+    confusion_matrix,
+    f1_score,
+    precision_recall_fscore_support,
+)
+
+
+@dataclass
+class FoldEvaluation:
+    """Structured evaluation outputs for a single held-out fold."""
+
+    fold_metrics: dict[str, int | float]
+    per_class_metrics: pd.DataFrame
+    confusion_matrix: pd.DataFrame
+    per_class_confusion: pd.DataFrame
+
+
+def evaluate_fold(
+    *,
+    fold_index: int,
+    y_true: pd.Series,
+    y_pred: pd.Series,
+    label_ids: Sequence[int],
+    label_names: Sequence[str],
+) -> FoldEvaluation:
+    """Compute scalar, per-class, and confusion metrics for one fold."""
+    labels = list(label_ids)
+    names = list(label_names)
+    truth = pd.Series(y_true).reset_index(drop=True)
+    predictions = pd.Series(y_pred).reset_index(drop=True)
+
+    fold_metrics = {
+        "fold": fold_index,
+        "accuracy": float(accuracy_score(truth, predictions)),
+        "micro_f1": float(
+            f1_score(truth, predictions, labels=labels, average="micro", zero_division=0)
+        ),
+        "macro_f1": float(
+            f1_score(truth, predictions, labels=labels, average="macro", zero_division=0)
+        ),
+    }
+
+    precision, recall, f1_values, support = precision_recall_fscore_support(
+        truth,
+        predictions,
+        labels=labels,
+        zero_division=0,
+    )
+    per_class_metrics = pd.DataFrame(
+        {
+            "fold": fold_index,
+            "label_id": labels,
+            "label": names,
+            "label_slug": [_slugify(label_name) for label_name in names],
+            "precision": precision,
+            "recall": recall,
+            "f1": f1_values,
+            "support": support.astype(int),
+        }
+    )
+
+    matrix = confusion_matrix(truth, predictions, labels=labels)
+    confusion_rows: list[dict[str, int | str]] = []
+    per_class_confusion_rows: list[dict[str, int | str]] = []
+    total = int(matrix.sum())
+
+    for actual_position, actual_label_id in enumerate(labels):
+        for predicted_position, predicted_label_id in enumerate(labels):
+            confusion_rows.append(
+                {
+                    "fold": fold_index,
+                    "actual_label_id": actual_label_id,
+                    "actual_label": names[actual_position],
+                    "predicted_label_id": predicted_label_id,
+                    "predicted_label": names[predicted_position],
+                    "count": int(matrix[actual_position, predicted_position]),
+                }
+            )
+
+    for label_position, label_id in enumerate(labels):
+        tp = int(matrix[label_position, label_position])
+        fn = int(matrix[label_position, :].sum() - tp)
+        fp = int(matrix[:, label_position].sum() - tp)
+        tn = int(total - tp - fn - fp)
+        per_class_confusion_rows.append(
+            {
+                "fold": fold_index,
+                "label_id": label_id,
+                "label": names[label_position],
+                "label_slug": _slugify(names[label_position]),
+                "tp": tp,
+                "fp": fp,
+                "fn": fn,
+                "tn": tn,
+            }
+        )
+
+    return FoldEvaluation(
+        fold_metrics=fold_metrics,
+        per_class_metrics=per_class_metrics,
+        confusion_matrix=pd.DataFrame(confusion_rows),
+        per_class_confusion=pd.DataFrame(per_class_confusion_rows),
+    )
+
+
+def summarize_cv_results(fold_evaluations: Sequence[FoldEvaluation]) -> dict[str, object]:
+    """Aggregate fold evaluations into compact CV summaries for MLflow."""
+    if not fold_evaluations:
+        raise ValueError("At least one fold evaluation is required.")
+
+    fold_metrics = (
+        pd.DataFrame([evaluation.fold_metrics for evaluation in fold_evaluations])
+        .sort_values("fold")
+        .reset_index(drop=True)
+    )
+    per_class_metrics = pd.concat(
+        [evaluation.per_class_metrics for evaluation in fold_evaluations],
+        ignore_index=True,
+    )
+    confusion_matrix_rows = pd.concat(
+        [evaluation.confusion_matrix for evaluation in fold_evaluations],
+        ignore_index=True,
+    )
+    per_class_confusion = pd.concat(
+        [evaluation.per_class_confusion for evaluation in fold_evaluations],
+        ignore_index=True,
+    )
+
+    overall_metrics = {
+        "cv_accuracy_mean": float(fold_metrics["accuracy"].mean()),
+        "cv_accuracy_std": float(fold_metrics["accuracy"].std(ddof=0)),
+        "cv_micro_f1_mean": float(fold_metrics["micro_f1"].mean()),
+        "cv_micro_f1_std": float(fold_metrics["micro_f1"].std(ddof=0)),
+        "cv_macro_f1_mean": float(fold_metrics["macro_f1"].mean()),
+        "cv_macro_f1_std": float(fold_metrics["macro_f1"].std(ddof=0)),
+    }
+
+    per_class_summary = (
+        per_class_metrics.groupby(["label_id", "label", "label_slug"], sort=False)
+        .agg(
+            precision_mean=("precision", "mean"),
+            precision_std=("precision", lambda values: float(values.std(ddof=0))),
+            recall_mean=("recall", "mean"),
+            recall_std=("recall", lambda values: float(values.std(ddof=0))),
+            f1_mean=("f1", "mean"),
+            f1_std=("f1", lambda values: float(values.std(ddof=0))),
+            support_mean=("support", "mean"),
+            support_std=("support", lambda values: float(values.std(ddof=0))),
+        )
+        .reset_index()
+        .sort_values("label_id")
+        .reset_index(drop=True)
+    )
+
+    per_class_confusion_summary = (
+        per_class_confusion.groupby(["label_id", "label", "label_slug"], sort=False)
+        .agg(
+            tp_mean=("tp", "mean"),
+            tp_std=("tp", lambda values: float(values.std(ddof=0))),
+            fp_mean=("fp", "mean"),
+            fp_std=("fp", lambda values: float(values.std(ddof=0))),
+            fn_mean=("fn", "mean"),
+            fn_std=("fn", lambda values: float(values.std(ddof=0))),
+            tn_mean=("tn", "mean"),
+            tn_std=("tn", lambda values: float(values.std(ddof=0))),
+        )
+        .reset_index()
+        .sort_values("label_id")
+        .reset_index(drop=True)
+    )
+
+    confusion_summary = (
+        confusion_matrix_rows.groupby(
+            [
+                "actual_label_id",
+                "actual_label",
+                "predicted_label_id",
+                "predicted_label",
+            ],
+            sort=False,
+        )
+        .agg(
+            count_mean=("count", "mean"),
+            count_std=("count", lambda values: float(values.std(ddof=0))),
+        )
+        .reset_index()
+    )
+    confusion_matrix_mean = _pivot_confusion_summary(confusion_summary, "count_mean")
+    confusion_matrix_std = _pivot_confusion_summary(confusion_summary, "count_std")
+
+    mlflow_metrics = {
+        **overall_metrics,
+        **_flatten_per_class_metrics(per_class_summary),
+        **_flatten_per_class_confusion_metrics(per_class_confusion_summary),
+    }
+
+    return {
+        "overall_metrics": overall_metrics,
+        "mlflow_metrics": mlflow_metrics,
+        "per_class_metrics": per_class_summary,
+        "per_class_confusion": per_class_confusion_summary,
+        "confusion_matrix_mean": confusion_matrix_mean,
+        "confusion_matrix_std": confusion_matrix_std,
+    }
+
+
+def _flatten_per_class_metrics(per_class_summary: pd.DataFrame) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+    for row in per_class_summary.itertuples(index=False):
+        metrics[f"cv_precision_mean__{row.label_slug}"] = float(row.precision_mean)
+        metrics[f"cv_precision_std__{row.label_slug}"] = float(row.precision_std)
+        metrics[f"cv_recall_mean__{row.label_slug}"] = float(row.recall_mean)
+        metrics[f"cv_recall_std__{row.label_slug}"] = float(row.recall_std)
+        metrics[f"cv_f1_mean__{row.label_slug}"] = float(row.f1_mean)
+        metrics[f"cv_f1_std__{row.label_slug}"] = float(row.f1_std)
+        metrics[f"cv_support_mean__{row.label_slug}"] = float(row.support_mean)
+        metrics[f"cv_support_std__{row.label_slug}"] = float(row.support_std)
+    return metrics
+
+
+def _flatten_per_class_confusion_metrics(
+    per_class_confusion_summary: pd.DataFrame,
+) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+    for row in per_class_confusion_summary.itertuples(index=False):
+        metrics[f"cv_tp_mean__{row.label_slug}"] = float(row.tp_mean)
+        metrics[f"cv_tp_std__{row.label_slug}"] = float(row.tp_std)
+        metrics[f"cv_fp_mean__{row.label_slug}"] = float(row.fp_mean)
+        metrics[f"cv_fp_std__{row.label_slug}"] = float(row.fp_std)
+        metrics[f"cv_fn_mean__{row.label_slug}"] = float(row.fn_mean)
+        metrics[f"cv_fn_std__{row.label_slug}"] = float(row.fn_std)
+        metrics[f"cv_tn_mean__{row.label_slug}"] = float(row.tn_mean)
+        metrics[f"cv_tn_std__{row.label_slug}"] = float(row.tn_std)
+    return metrics
+
+
+def _pivot_confusion_summary(
+    confusion_summary: pd.DataFrame, value_column: str
+) -> pd.DataFrame:
+    matrix = (
+        confusion_summary.pivot(
+            index="actual_label",
+            columns="predicted_label",
+            values=value_column,
+        )
+        .fillna(0.0)
+        .sort_index(axis=0)
+        .sort_index(axis=1)
+    )
+    matrix.index.name = "actual_label"
+    return matrix.reset_index()
+
+
+def _slugify(value: str) -> str:
+    return "_".join(value.lower().split())
