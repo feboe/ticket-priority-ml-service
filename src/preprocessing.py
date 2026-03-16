@@ -105,7 +105,7 @@ class TfidfFeatureExtractor:
     max_features: int = None
     min_df: int = 2
     max_df: float = 0.95
-    ngram_range: tuple[int, int] = (1, 5)
+    ngram_range: tuple[int, int] = (1, 4)
     stop_words: str | None = None
     sublinear_tf: bool = True
     vectorizer: TfidfVectorizer = field(init=False)

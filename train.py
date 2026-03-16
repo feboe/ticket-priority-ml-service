@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import sys
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -14,8 +12,6 @@ from src.classification import ClassificationTrainer
 from src.evaluation import evaluate_fold, summarize_cv_results
 from src.tracking import (
     build_base_run_name,
-    build_runtime_metadata,
-    collect_git_metadata,
     configure_tracking,
     log_dataframe_artifact,
     log_json_artifact,
@@ -27,6 +23,7 @@ from src.training_utils import make_stratified_folds
 
 TASK_NAMES = ("queue", "priority")
 STRATIFY_TARGET_COLUMNS = ("queue", "priority")
+
 
 
 def parse_args() -> argparse.Namespace:
@@ -84,6 +81,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+
 def evaluate_task(
     task_name: str,
     folds: list,
@@ -118,6 +116,7 @@ def evaluate_task(
     return task_results
 
 
+
 def print_task_results(task_name: str, task_results: dict[str, Any]) -> None:
     metrics = task_results["overall_metrics"]
     print(task_name)
@@ -127,6 +126,7 @@ def print_task_results(task_name: str, task_results: dict[str, Any]) -> None:
     print(f"  cv_micro_f1_std: {metrics['cv_micro_f1_std']:.4f}")
     print(f"  cv_macro_f1_mean: {metrics['cv_macro_f1_mean']:.4f}")
     print(f"  cv_macro_f1_std: {metrics['cv_macro_f1_std']:.4f}")
+
 
 
 def build_dataset_metadata(df: pd.DataFrame, data_path: Path) -> dict[str, Any]:
@@ -143,15 +143,13 @@ def build_dataset_metadata(df: pd.DataFrame, data_path: Path) -> dict[str, Any]:
     }
 
 
+
 def build_shared_tracking_payload(
     *,
     args: argparse.Namespace,
     dataset_metadata: dict[str, Any],
-    git_metadata: dict[str, str],
-    runtime_metadata: dict[str, str],
     resolved_base_run_name: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    timestamp = datetime.now(timezone.utc).isoformat()
     params = {
         "run_group": args.run_group,
         "dataset_name": dataset_metadata["dataset_name"],
@@ -163,23 +161,10 @@ def build_shared_tracking_payload(
     }
     tags = {
         "run_group": args.run_group,
-        "run_base_name": resolved_base_run_name,
-        "timestamp": timestamp,
-        "dataset_path": dataset_metadata["dataset_path"],
-        "dataset_name": dataset_metadata["dataset_name"],
-        "dataset_id": dataset_metadata["dataset_id"],
-        "dataset_version_values": dataset_metadata["dataset_version_values"],
-        "git_commit": git_metadata["git_commit"],
-        "git_branch": git_metadata["git_branch"],
-        "git_dirty": git_metadata["git_dirty"],
-        "command": runtime_metadata["command"],
-        "python_version": runtime_metadata["python_version"],
-        "tracking_uri": args.tracking_uri,
-        "experiment_name": args.experiment_name,
-        "notes": args.notes,
         "mlflow.note.content": args.notes,
     }
     return params, tags
+
 
 
 def build_task_tracking_payload(
@@ -200,8 +185,6 @@ def build_task_tracking_payload(
     }
     tags = {
         "task_name": task_name,
-        "run_name": f"{base_run_name}::{task_name}",
-        "class_labels": per_class_metrics["label"].tolist(),
     }
     run_config = {
         "task_name": task_name,
@@ -215,6 +198,7 @@ def build_task_tracking_payload(
     return params, tags, run_config
 
 
+
 def main() -> None:
     args = parse_args()
     df = pd.read_csv(args.data)
@@ -226,21 +210,16 @@ def main() -> None:
     )
 
     dataset_metadata = build_dataset_metadata(df, args.data)
-    git_metadata = collect_git_metadata(Path.cwd())
-    runtime_metadata = build_runtime_metadata(sys.argv)
     resolved_base_run_name = build_base_run_name(
         run_group=args.run_group,
         dataset_id=dataset_metadata["dataset_id"],
         cv_folds=args.cv_folds,
         seed=args.random_state,
-        git_sha=git_metadata["git_commit"],
         run_name=args.run_name,
     )
     shared_params, shared_tags = build_shared_tracking_payload(
         args=args,
         dataset_metadata=dataset_metadata,
-        git_metadata=git_metadata,
-        runtime_metadata=runtime_metadata,
         resolved_base_run_name=resolved_base_run_name,
     )
 
@@ -265,8 +244,6 @@ def main() -> None:
             },
             "shared_metadata": {
                 **dataset_metadata,
-                **git_metadata,
-                **runtime_metadata,
                 "run_group": args.run_group,
                 "run_name": run_name,
                 "notes": args.notes,
