@@ -106,6 +106,7 @@ class TfidfFeatureExtractor:
     min_df: int = 1
     max_df: float = 0.95
     ngram_range: tuple[int, int] = (1, 4)
+    analyzer: str = "word"
     stop_words: str | None = None
     sublinear_tf: bool = False
     vectorizer: TfidfVectorizer = field(init=False)
@@ -116,6 +117,7 @@ class TfidfFeatureExtractor:
             min_df=self.min_df,
             max_df=self.max_df,
             ngram_range=self.ngram_range,
+            analyzer=self.analyzer,
             stop_words=self.stop_words,
             sublinear_tf=self.sublinear_tf,
         )

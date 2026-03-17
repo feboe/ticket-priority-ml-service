@@ -1,0 +1,12 @@
+﻿.venv/
+__pycache__/
+.git/
+.gitignore
+mlruns/
+data/
+notebooks/
+tests/
+*.pyc
+*.pyo
+*.pyd
+*.log

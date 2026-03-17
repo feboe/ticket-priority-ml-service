@@ -157,6 +157,7 @@ class ClassificationTrainer:
             "max_df": feature_extractor.max_df,
             "ngram_min": feature_extractor.ngram_range[0],
             "ngram_max": feature_extractor.ngram_range[1],
+            "analyzer": feature_extractor.analyzer,
             "sublinear_tf": feature_extractor.sublinear_tf,
             "length_feature_enabled": self.preprocessor.pipeline.length_feature_enabled,
         }
@@ -210,7 +211,6 @@ class ClassificationTrainer:
         return self._test_y
 
 
-
 def evaluate_task(
     task_name: str,
     folds: list[HoldoutSplit],
@@ -250,7 +250,6 @@ def evaluate_task(
     task_results = summarize_cv_results(fold_evaluations)
     task_results["task_config"] = trainer_config or {}
     return task_results
-
 
 
 def fit_final_model(
