@@ -1,4 +1,4 @@
-"""Classification training workflows."""
+﻿"""Classification training workflows."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from scipy.sparse import csr_matrix
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import LinearSVC
 
+from .evaluation import evaluate_fold, summarize_cv_results
 from .preprocessing import PriorityPreprocessor, QueuePreprocessor
 from .training_utils import HoldoutSplit, make_holdout_split
 
@@ -32,8 +33,8 @@ C_BY_ALGORITHM_AND_TASK = {
         "priority": 2.0,
     },
     "linear_svc": {
-        "queue": 2.0,
-        "priority": 2.0,
+        "queue": 8.0,
+        "priority": 4.0,
     },
 }
 
@@ -195,3 +196,57 @@ class ClassificationTrainer:
         if self._test_y is None:
             raise ValueError("Test targets are unavailable. Fit the trainer first.")
         return self._test_y
+
+
+def evaluate_task(
+    task_name: str,
+    folds: list[HoldoutSplit],
+    random_state: int,
+    algorithm: str,
+) -> dict[str, Any]:
+    fold_evaluations = []
+    trainer_config: dict[str, Any] | None = None
+
+    for fold_index, split in enumerate(folds, start=1):
+        trainer = ClassificationTrainer(
+            task_name=task_name,
+            algorithm=algorithm,
+            random_state=random_state,
+        )
+        trainer.fit_on_split(split)
+
+        fold_evaluations.append(
+            evaluate_fold(
+                fold_index=fold_index,
+                y_true=trainer.get_test_truth(),
+                y_pred=trainer.get_test_predictions(),
+                label_ids=trainer.get_label_order(),
+                label_names=trainer.get_label_names(),
+            )
+        )
+
+        if trainer_config is None:
+            trainer_config = {
+                "target_column": trainer.get_target_column(),
+                "model": trainer.get_model_config(),
+                "preprocessing": trainer.get_preprocessing_config(),
+            }
+
+    task_results = summarize_cv_results(fold_evaluations)
+    task_results["task_config"] = trainer_config or {}
+    return task_results
+
+
+def fit_final_model(
+    task_name: str,
+    df: pd.DataFrame,
+    random_state: int,
+    algorithm: str,
+) -> ClassificationTrainer:
+    trainer = ClassificationTrainer(
+        task_name=task_name,
+        algorithm=algorithm,
+        random_state=random_state,
+    )
+    trainer.fit_full(df)
+    return trainer

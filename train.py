@@ -8,10 +8,17 @@ from typing import Any
 
 import pandas as pd
 
-from src.classification import ClassificationTrainer, SUPPORTED_ALGORITHMS
-from src.evaluation import evaluate_fold, summarize_cv_results
+from src.classification import (
+    SUPPORTED_ALGORITHMS,
+    evaluate_task,
+    fit_final_model,
+)
 from src.tracking import (
     build_base_run_name,
+    build_dataset_metadata,
+    build_run_config,
+    build_shared_tracking_payload,
+    build_task_tracking_payload,
     configure_tracking,
     log_dataframe_artifact,
     log_json_artifact,
@@ -24,6 +31,7 @@ from src.training_utils import make_stratified_folds
 
 TASK_NAMES = ("queue", "priority")
 STRATIFY_TARGET_COLUMNS = ("queue", "priority")
+
 
 
 def parse_args() -> argparse.Namespace:
@@ -79,67 +87,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional override for the base run name.",
     )
-    parser.add_argument(
-        "--notes",
-        type=str,
-        default=None,
-        help="Optional free-text note stored with the run.",
-    )
     return parser.parse_args()
 
-
-def evaluate_task(
-    task_name: str,
-    folds: list,
-    random_state: int,
-    algorithm: str,
-) -> dict[str, Any]:
-    fold_evaluations = []
-    trainer_config: dict[str, Any] | None = None
-
-    for fold_index, split in enumerate(folds, start=1):
-        trainer = ClassificationTrainer(
-            task_name=task_name,
-            algorithm=algorithm,
-            random_state=random_state,
-        )
-        trainer.fit_on_split(split)
-
-        fold_evaluations.append(
-            evaluate_fold(
-                fold_index=fold_index,
-                y_true=trainer.get_test_truth(),
-                y_pred=trainer.get_test_predictions(),
-                label_ids=trainer.get_label_order(),
-                label_names=trainer.get_label_names(),
-            )
-        )
-
-        if trainer_config is None:
-            trainer_config = {
-                "target_column": trainer.get_target_column(),
-                "model": trainer.get_model_config(),
-                "preprocessing": trainer.get_preprocessing_config(),
-            }
-
-    task_results = summarize_cv_results(fold_evaluations)
-    task_results["task_config"] = trainer_config or {}
-    return task_results
-
-
-def fit_final_model(
-    task_name: str,
-    df: pd.DataFrame,
-    random_state: int,
-    algorithm: str,
-) -> ClassificationTrainer:
-    trainer = ClassificationTrainer(
-        task_name=task_name,
-        algorithm=algorithm,
-        random_state=random_state,
-    )
-    trainer.fit_full(df)
-    return trainer
 
 
 def print_task_results(task_name: str, task_results: dict[str, Any]) -> None:
@@ -150,75 +99,6 @@ def print_task_results(task_name: str, task_results: dict[str, Any]) -> None:
     print(f"  cv_macro_f1_mean: {metrics['cv_macro_f1_mean']:.4f}")
     print(f"  cv_macro_f1_std: {metrics['cv_macro_f1_std']:.4f}")
 
-
-def build_dataset_metadata(df: pd.DataFrame, data_path: Path) -> dict[str, Any]:
-    version_values = []
-    if "version" in df.columns:
-        version_values = sorted(df["version"].dropna().astype(str).unique().tolist())
-
-    return {
-        "dataset_path": str(data_path.resolve()),
-        "dataset_name": data_path.name,
-        "dataset_id": data_path.stem,
-        "dataset_row_count": int(len(df)),
-        "dataset_version_values": version_values,
-    }
-
-
-def build_shared_tracking_payload(
-    *,
-    args: argparse.Namespace,
-    dataset_metadata: dict[str, Any],
-    resolved_base_run_name: str,
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    params = {
-        "run_group": args.run_group,
-        "dataset": dataset_metadata["dataset_id"],
-        "dataset_name": dataset_metadata["dataset_name"],
-        "dataset_id": dataset_metadata["dataset_id"],
-        "dataset_row_count": dataset_metadata["dataset_row_count"],
-        "cv_folds": args.cv_folds,
-        "random_state": args.random_state,
-        "stratify_columns": list(STRATIFY_TARGET_COLUMNS),
-        "model": args.algorithm,
-        "algorithm": args.algorithm,
-    }
-    tags = {
-        "run_group": args.run_group,
-        "mlflow.note.content": args.notes,
-    }
-    return params, tags
-
-
-def build_task_tracking_payload(
-    *,
-    task_name: str,
-    task_results: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    task_config = task_results["task_config"]
-    per_class_metrics = task_results["per_class_metrics"]
-
-    params = {
-        "task_name": task_name,
-        "target_column": task_config["target_column"],
-        **task_config["model"],
-        **task_config["preprocessing"],
-        "num_classes": int(len(per_class_metrics)),
-    }
-    tags = {
-        "task_name": task_name,
-    }
-    run_config = {
-        "task_name": task_name,
-        "target_column": task_config["target_column"],
-        "labels": per_class_metrics[["label_id", "label"]].to_dict(orient="records"),
-        "model": task_config["model"],
-        "preprocessing": task_config["preprocessing"],
-        "artifacts": {
-            "trained_model": "trained_model.joblib",
-        },
-    }
-    return params, tags, run_config
 
 
 def main() -> None:
@@ -242,7 +122,6 @@ def main() -> None:
     shared_params, shared_tags = build_shared_tracking_payload(
         args=args,
         dataset_metadata=dataset_metadata,
-        resolved_base_run_name=resolved_base_run_name,
     )
 
     configure_tracking(args.tracking_uri, args.experiment_name)
@@ -262,33 +141,20 @@ def main() -> None:
         print_task_results(task_name, task_results)
 
         run_name = f"{resolved_base_run_name}::{args.algorithm}::{task_name}"
-        task_params, task_tags, run_config = build_task_tracking_payload(
+        task_params, task_tags = build_task_tracking_payload(
             task_name=task_name,
             task_results=task_results,
         )
         task_tags = {**shared_tags, **task_tags}
         task_params = {**shared_params, **task_params}
-        run_config = {
-            **run_config,
-            "tracking": {
-                "tracking_uri": args.tracking_uri,
-                "experiment_name": args.experiment_name,
-                "table_fields": {
-                    "dataset": dataset_metadata["dataset_id"],
-                    "model": args.algorithm,
-                },
-            },
-            "shared_metadata": {
-                **dataset_metadata,
-                "run_group": args.run_group,
-                "run_name": run_name,
-                "notes": args.notes,
-                "cv_folds": args.cv_folds,
-                "random_state": args.random_state,
-                "algorithm": args.algorithm,
-                "stratify_columns": list(STRATIFY_TARGET_COLUMNS),
-            },
-        }
+        run_config = build_run_config(
+            args=args,
+            task_name=task_name,
+            task_results=task_results,
+            dataset_metadata=dataset_metadata,
+            run_name=run_name,
+            stratify_columns=list(STRATIFY_TARGET_COLUMNS),
+        )
 
         with start_run(run_name):
             log_run_metadata(
