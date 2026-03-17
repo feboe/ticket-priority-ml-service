@@ -99,6 +99,16 @@ class ClassificationTrainer:
         self.target_mapping_ = train_data.target_mapping or {}
         return self
 
+    def fit_full(self, df: pd.DataFrame) -> ClassificationTrainer:
+        train_data = self.preprocessor.fit_transform(df)
+        self.model.fit(train_data.X, train_data.y)
+        self.feature_names_ = train_data.feature_names
+        self.target_mapping_ = train_data.target_mapping or {}
+        self._test_X = None
+        self._test_y = None
+        self._test_predictions = None
+        return self
+
     def predict(self, df: pd.DataFrame) -> pd.Series:
         if not self.target_mapping_:
             raise ValueError("Target mapping is unavailable. Fit the trainer first.")

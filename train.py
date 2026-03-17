@@ -1,4 +1,4 @@
-"""Top-level entrypoint for stratified cross-validation training."""
+﻿"""Top-level entrypoint for stratified cross-validation training."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from src.tracking import (
     configure_tracking,
     log_dataframe_artifact,
     log_json_artifact,
+    log_model_artifact,
     log_run_metadata,
     start_run,
 )
@@ -23,7 +24,6 @@ from src.training_utils import make_stratified_folds
 
 TASK_NAMES = ("queue", "priority")
 STRATIFY_TARGET_COLUMNS = ("queue", "priority")
-
 
 
 def parse_args() -> argparse.Namespace:
@@ -88,7 +88,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-
 def evaluate_task(
     task_name: str,
     folds: list,
@@ -128,17 +127,28 @@ def evaluate_task(
     return task_results
 
 
+def fit_final_model(
+    task_name: str,
+    df: pd.DataFrame,
+    random_state: int,
+    algorithm: str,
+) -> ClassificationTrainer:
+    trainer = ClassificationTrainer(
+        task_name=task_name,
+        algorithm=algorithm,
+        random_state=random_state,
+    )
+    trainer.fit_full(df)
+    return trainer
+
 
 def print_task_results(task_name: str, task_results: dict[str, Any]) -> None:
     metrics = task_results["overall_metrics"]
     print(task_name)
     print(f"  cv_accuracy_mean: {metrics['cv_accuracy_mean']:.4f}")
     print(f"  cv_accuracy_std: {metrics['cv_accuracy_std']:.4f}")
-    print(f"  cv_micro_f1_mean: {metrics['cv_micro_f1_mean']:.4f}")
-    print(f"  cv_micro_f1_std: {metrics['cv_micro_f1_std']:.4f}")
     print(f"  cv_macro_f1_mean: {metrics['cv_macro_f1_mean']:.4f}")
     print(f"  cv_macro_f1_std: {metrics['cv_macro_f1_std']:.4f}")
-
 
 
 def build_dataset_metadata(df: pd.DataFrame, data_path: Path) -> dict[str, Any]:
@@ -155,7 +165,6 @@ def build_dataset_metadata(df: pd.DataFrame, data_path: Path) -> dict[str, Any]:
     }
 
 
-
 def build_shared_tracking_payload(
     *,
     args: argparse.Namespace,
@@ -164,12 +173,14 @@ def build_shared_tracking_payload(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     params = {
         "run_group": args.run_group,
+        "dataset": dataset_metadata["dataset_id"],
         "dataset_name": dataset_metadata["dataset_name"],
         "dataset_id": dataset_metadata["dataset_id"],
         "dataset_row_count": dataset_metadata["dataset_row_count"],
         "cv_folds": args.cv_folds,
         "random_state": args.random_state,
         "stratify_columns": list(STRATIFY_TARGET_COLUMNS),
+        "model": args.algorithm,
         "algorithm": args.algorithm,
     }
     tags = {
@@ -177,7 +188,6 @@ def build_shared_tracking_payload(
         "mlflow.note.content": args.notes,
     }
     return params, tags
-
 
 
 def build_task_tracking_payload(
@@ -201,14 +211,14 @@ def build_task_tracking_payload(
     run_config = {
         "task_name": task_name,
         "target_column": task_config["target_column"],
-        "labels": per_class_metrics[["label_id", "label", "label_slug"]].to_dict(
-            orient="records"
-        ),
+        "labels": per_class_metrics[["label_id", "label"]].to_dict(orient="records"),
         "model": task_config["model"],
         "preprocessing": task_config["preprocessing"],
+        "artifacts": {
+            "trained_model": "trained_model.joblib",
+        },
     }
     return params, tags, run_config
-
 
 
 def main() -> None:
@@ -243,6 +253,12 @@ def main() -> None:
             random_state=args.random_state,
             algorithm=args.algorithm,
         )
+        final_trainer = fit_final_model(
+            task_name=task_name,
+            df=df,
+            random_state=args.random_state,
+            algorithm=args.algorithm,
+        )
         print_task_results(task_name, task_results)
 
         run_name = f"{resolved_base_run_name}::{args.algorithm}::{task_name}"
@@ -257,6 +273,10 @@ def main() -> None:
             "tracking": {
                 "tracking_uri": args.tracking_uri,
                 "experiment_name": args.experiment_name,
+                "table_fields": {
+                    "dataset": dataset_metadata["dataset_id"],
+                    "model": args.algorithm,
+                },
             },
             "shared_metadata": {
                 **dataset_metadata,
@@ -289,6 +309,7 @@ def main() -> None:
                 task_results["confusion_matrix_std"], "confusion_matrix_std.csv"
             )
             log_json_artifact(run_config, "run_config.json")
+            log_model_artifact(final_trainer, "trained_model.joblib")
 
 
 if __name__ == "__main__":
