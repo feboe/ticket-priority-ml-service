@@ -34,6 +34,16 @@ STRATIFY_TARGET_COLUMNS = ("queue", "priority")
 
 
 
+def _parse_bool(value: str) -> bool:
+    normalized = value.strip().lower()
+    if normalized in {"true", "1", "yes", "y"}:
+        return True
+    if normalized in {"false", "0", "no", "n"}:
+        return False
+    raise argparse.ArgumentTypeError("Expected one of: true, false, 1, 0, yes, no")
+
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run shared stratified cross-validation for queue and priority models."
@@ -62,6 +72,12 @@ def parse_args() -> argparse.Namespace:
         choices=SUPPORTED_ALGORITHMS,
         default="logreg",
         help="Classifier algorithm used for both tasks.",
+    )
+    parser.add_argument(
+        "--length-feature-enabled",
+        type=_parse_bool,
+        default=False,
+        help="Whether to append normalized ticket length as an extra feature.",
     )
     parser.add_argument(
         "--tracking-uri",
@@ -131,12 +147,14 @@ def main() -> None:
             folds=folds,
             random_state=args.random_state,
             algorithm=args.algorithm,
+            length_feature_enabled=args.length_feature_enabled,
         )
         final_trainer = fit_final_model(
             task_name=task_name,
             df=df,
             random_state=args.random_state,
             algorithm=args.algorithm,
+            length_feature_enabled=args.length_feature_enabled,
         )
         print_task_results(task_name, task_results)
 
@@ -152,6 +170,7 @@ def main() -> None:
             task_name=task_name,
             task_results=task_results,
             dataset_metadata=dataset_metadata,
+            final_trainer=final_trainer,
             run_name=run_name,
             stratify_columns=list(STRATIFY_TARGET_COLUMNS),
         )

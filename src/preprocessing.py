@@ -1,4 +1,4 @@
-"""Compact TF-IDF preprocessing for queue and priority classification."""
+﻿"""Compact TF-IDF preprocessing for queue and priority classification."""
 
 from __future__ import annotations
 
@@ -103,11 +103,11 @@ class TfidfFeatureExtractor:
     """Wrap a configured TF-IDF vectorizer."""
 
     max_features: int = None
-    min_df: int = 2
+    min_df: int = 1
     max_df: float = 0.95
     ngram_range: tuple[int, int] = (1, 4)
     stop_words: str | None = None
-    sublinear_tf: bool = True
+    sublinear_tf: bool = False
     vectorizer: TfidfVectorizer = field(init=False)
 
     def __post_init__(self) -> None:
@@ -204,28 +204,32 @@ class TfidfTargetPreprocessor:
     """Shared TF-IDF preprocessing logic for a single target."""
 
     target_column: str
+    length_feature_enabled: bool = True
     text_pipeline: TextPreparationPipeline = field(
         default_factory=TextPreparationPipeline
     )
     feature_extractor: TfidfFeatureExtractor = field(
         default_factory=TfidfFeatureExtractor
     )
-    length_extractor: LengthFeatureExtractor = field(
-        default_factory=LengthFeatureExtractor
-    )
     target_encoder: TargetEncoder | OrderedTargetEncoder | None = None
+    length_extractor: LengthFeatureExtractor | None = field(default=None, init=False)
+
+    def __post_init__(self) -> None:
+        if self.length_feature_enabled:
+            self.length_extractor = LengthFeatureExtractor()
 
     def fit_transform(self, frame: pd.DataFrame) -> VectorizedDataset:
         prepared = self._prepare_frame(frame)
         X_text = self.feature_extractor.fit_transform(
             prepared[self.text_pipeline.cleaned_column]
         )
-        X_length = self.length_extractor.fit_transform(prepared)
-        X = hstack([X_text, X_length], format="csr")
-        feature_names = (
-            self.feature_extractor.get_feature_names()
-            + self.length_extractor.get_feature_names()
-        )
+        feature_names = self.feature_extractor.get_feature_names()
+        if self.length_extractor is None:
+            X = X_text
+        else:
+            X_length = self.length_extractor.fit_transform(prepared)
+            X = hstack([X_text, X_length], format="csr")
+            feature_names = feature_names + self.length_extractor.get_feature_names()
 
         y = prepared[self.target_column].reset_index(drop=True)
         target_mapping = None
@@ -245,6 +249,8 @@ class TfidfTargetPreprocessor:
         X_text = self.feature_extractor.transform(
             prepared[self.text_pipeline.cleaned_column]
         )
+        if self.length_extractor is None:
+            return X_text
         X_length = self.length_extractor.transform(prepared)
         return hstack([X_text, X_length], format="csr")
 
@@ -267,12 +273,15 @@ class TfidfTargetPreprocessor:
 class QueuePreprocessor:
     """Preprocessing workflow for queue prediction."""
 
-    pipeline: TfidfTargetPreprocessor = field(
-        default_factory=lambda: TfidfTargetPreprocessor(
+    length_feature_enabled: bool = True
+    pipeline: TfidfTargetPreprocessor = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.pipeline = TfidfTargetPreprocessor(
             target_column="queue",
+            length_feature_enabled=self.length_feature_enabled,
             target_encoder=TargetEncoder(),
         )
-    )
 
     def fit_transform(self, frame: pd.DataFrame) -> VectorizedDataset:
         return self.pipeline.fit_transform(frame)
@@ -285,12 +294,15 @@ class QueuePreprocessor:
 class PriorityPreprocessor:
     """Preprocessing workflow for priority prediction."""
 
-    pipeline: TfidfTargetPreprocessor = field(
-        default_factory=lambda: TfidfTargetPreprocessor(
+    length_feature_enabled: bool = True
+    pipeline: TfidfTargetPreprocessor = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.pipeline = TfidfTargetPreprocessor(
             target_column="priority",
+            length_feature_enabled=self.length_feature_enabled,
             target_encoder=OrderedTargetEncoder(("low", "medium", "high")),
         )
-    )
 
     def fit_transform(self, frame: pd.DataFrame) -> VectorizedDataset:
         return self.pipeline.fit_transform(frame)

@@ -115,11 +115,13 @@ def build_run_config(
     task_name: str,
     task_results: dict[str, Any],
     dataset_metadata: dict[str, Any],
+    final_trainer: Any,
     run_name: str,
     stratify_columns: list[str],
 ) -> dict[str, Any]:
     task_config = task_results["task_config"]
     per_class_metrics = task_results["per_class_metrics"]
+    feature_summary = final_trainer.get_feature_summary()
 
     return {
         "run": {
@@ -145,6 +147,11 @@ def build_run_config(
         },
         "model": task_config["model"],
         "preprocessing": task_config["preprocessing"],
+        "feature_matrix": {
+            "rows": dataset_metadata["dataset_row_count"],
+            "columns": feature_summary["feature_count"],
+            "feature_families": feature_summary["feature_families"],
+        },
         "artifacts": {
             "trained_model": "trained_model.joblib",
         },

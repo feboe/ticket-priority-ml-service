@@ -52,6 +52,7 @@ class ClassificationTrainer:
     algorithm: str = "logreg"
     random_state: int = 42
     test_size: float = 0.2
+    length_feature_enabled: bool = False
     model: LogisticRegression | LinearSVC = field(init=False)
     preprocessor: QueuePreprocessor | PriorityPreprocessor = field(init=False)
     feature_names_: list[str] = field(default_factory=list, init=False)
@@ -73,7 +74,9 @@ class ClassificationTrainer:
             )
 
         self.model = self._build_model()
-        self.preprocessor = PREPROCESSOR_FACTORY[self.task_name]()
+        self.preprocessor = PREPROCESSOR_FACTORY[self.task_name](
+            length_feature_enabled=self.length_feature_enabled
+        )
 
     def fit(self, df: pd.DataFrame) -> ClassificationTrainer:
         target_column = self.preprocessor.pipeline.target_column
@@ -155,7 +158,16 @@ class ClassificationTrainer:
             "ngram_min": feature_extractor.ngram_range[0],
             "ngram_max": feature_extractor.ngram_range[1],
             "sublinear_tf": feature_extractor.sublinear_tf,
-            "length_feature_enabled": True,
+            "length_feature_enabled": self.preprocessor.pipeline.length_feature_enabled,
+        }
+
+    def get_feature_summary(self) -> dict[str, Any]:
+        feature_families = ["tfidf"]
+        if self.preprocessor.pipeline.length_feature_enabled:
+            feature_families.append("length")
+        return {
+            "feature_count": len(self.feature_names_),
+            "feature_families": feature_families,
         }
 
     def _build_model(self) -> LogisticRegression | LinearSVC:
@@ -198,11 +210,13 @@ class ClassificationTrainer:
         return self._test_y
 
 
+
 def evaluate_task(
     task_name: str,
     folds: list[HoldoutSplit],
     random_state: int,
     algorithm: str,
+    length_feature_enabled: bool = True,
 ) -> dict[str, Any]:
     fold_evaluations = []
     trainer_config: dict[str, Any] | None = None
@@ -212,6 +226,7 @@ def evaluate_task(
             task_name=task_name,
             algorithm=algorithm,
             random_state=random_state,
+            length_feature_enabled=length_feature_enabled,
         )
         trainer.fit_on_split(split)
 
@@ -237,16 +252,19 @@ def evaluate_task(
     return task_results
 
 
+
 def fit_final_model(
     task_name: str,
     df: pd.DataFrame,
     random_state: int,
     algorithm: str,
+    length_feature_enabled: bool = True,
 ) -> ClassificationTrainer:
     trainer = ClassificationTrainer(
         task_name=task_name,
         algorithm=algorithm,
         random_state=random_state,
+        length_feature_enabled=length_feature_enabled,
     )
     trainer.fit_full(df)
     return trainer
