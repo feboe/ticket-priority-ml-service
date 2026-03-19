@@ -44,6 +44,51 @@ DEMO_TICKETS = [
             "help us restore access and confirm the required permissions."
         ),
     },
+    {
+        "title": "Sicherheitsvorfall im Kundenportal",
+        "subject": "Dringender Sicherheitsvorfall im Kundenportal",
+        "body": (
+            "Mehrere Nutzer melden verdächtige Anmeldeversuche und den Ausfall des Kundenportals. "
+            "Bitte prüfen Sie den Vorfall umgehend, geben Sie Maßnahmen zur Eindämmung vor und "
+            "informieren Sie über die nächsten Schritte zur Wiederherstellung."
+        ),
+    },
+    {
+        "title": "Falscher Rechnungsbetrag nach Vertragsverlängerung",
+        "subject": "Rechnung nach Verlängerung scheint zu hoch",
+        "body": (
+            "Nach der Verlängerung unseres Enterprise-Vertrags wurde ein deutlich höherer Betrag als "
+            "erwartet berechnet. Bitte prüfen Sie die Rechnung, erklären Sie die Abweichung und teilen "
+            "Sie uns mit, wie eine Korrektur oder Erstattung erfolgt."
+        ),
+    },
+    {
+        "title": "Instabile Geräte nach Firmware-Update",
+        "subject": "Firmware-Update verursacht Verbindungsabbrüche",
+        "body": (
+            "Seit dem letzten Firmware-Update verlieren mehrere Geräte nach kurzer Zeit die Verbindung "
+            "und arbeiten unzuverlässig. Bitte analysieren Sie die Ursache und empfehlen Sie eine "
+            "kurzfristige Lösung."
+        ),
+    },
+    {
+        "title": "Rücksendung defekter Zubehörteile",
+        "subject": "Bitte um Rücksendung und Austausch defekter Zubehörteile",
+        "body": (
+            "Wir haben mehrere Zubehörteile mit sichtbaren Mängeln erhalten und benötigen eine "
+            "Rücksendeanleitung. Bitte senden Sie uns Informationen zu Austausch, Versandlabel und "
+            "Bearbeitungsdauer."
+        ),
+    },
+    {
+        "title": "Zugriff auf das HR-Onboarding-Portal",
+        "subject": "Neuer Mitarbeiter hat keinen Zugriff auf das HR-Portal",
+        "body": (
+            "Ein neuer Mitarbeiter kann sich nicht im Onboarding-Portal anmelden und keine wichtigen "
+            "HR-Dokumente einsehen. Bitte stellen Sie den Zugriff wieder her und bestätigen Sie die "
+            "erforderlichen Berechtigungen."
+        ),
+    },
 ]
 
 

@@ -53,15 +53,15 @@ def _render_prediction_card(task_name: str, prediction: dict[str, Any]) -> None:
 
 
 def _render_model_metadata(models: dict[str, Any]) -> None:
-    st.subheader("Model Metadata")
-    for task_name, metadata in models.items():
-        with st.container(border=True):
-            st.write(f"**{task_name.title()} model**")
-            st.write(f"Run name: `{metadata['run_name']}`")
-            st.write(f"Run id: `{metadata['run_id']}`")
-            st.write(f"Algorithm: `{metadata['algorithm']}` ({metadata['model_family']})")
-            st.write(f"Analyzer: `{metadata['analyzer']}`")
-            st.write("Feature families: " + ", ".join(metadata["feature_families"]))
+    with st.expander("Model Details"):
+        for task_name, metadata in models.items():
+            with st.container(border=True):
+                st.write(f"**{task_name.title()} model**")
+                st.write(f"Run id: `{metadata['run_id']}`")
+                st.write(
+                    f"Algorithm: `{metadata['algorithm']}` ({metadata['model_family']})"
+                )
+                st.write("Feature families: " + ", ".join(metadata["feature_families"]))
 
 
 def main() -> None:
@@ -90,13 +90,20 @@ def main() -> None:
     with st.sidebar:
         st.header("Service")
         st.code(base_url)
+        sidebar_models: dict[str, Any] | None = None
         try:
             health = fetch_health(base_url)
             st.success("API is reachable")
             st.write("Loaded tasks: " + ", ".join(health["tasks"]))
+            sidebar_models = health.get("models")
         except requests.RequestException as exc:
             st.error(f"API unavailable: {exc}")
             health = None
+        response = st.session_state.prediction_response
+        if response and response.get("models"):
+            sidebar_models = response["models"]
+        if sidebar_models:
+            _render_model_metadata(sidebar_models)
 
     left_col, right_col = st.columns([1.5, 1.0])
 
@@ -144,7 +151,6 @@ def main() -> None:
                 _render_prediction_card("queue", response["predictions"]["queue"])
             with priority_col:
                 _render_prediction_card("priority", response["predictions"]["priority"])
-            _render_model_metadata(response["models"])
         else:
             st.subheader("Prediction Results")
             st.write("Submit a ticket or generate a demo ticket to see predictions.")

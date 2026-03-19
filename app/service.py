@@ -21,10 +21,8 @@ DEFAULT_SERVING_CONFIG_PATH = (
 class LoadedTaskModel:
     task_name: str
     run_id: str
-    run_name: str
     algorithm: str
     model_family: str
-    analyzer: str
     feature_families: list[str]
     trainer: Any
 
@@ -57,10 +55,8 @@ class LoadedTaskModel:
     def metadata(self) -> dict[str, Any]:
         return {
             "run_id": self.run_id,
-            "run_name": self.run_name,
             "algorithm": self.algorithm,
             "model_family": self.model_family,
-            "analyzer": self.analyzer,
             "feature_families": self.feature_families,
         }
 
@@ -86,13 +82,6 @@ class TicketRoutingService:
             run_config = json.loads(
                 (base_dir / spec["run_config_path"]).read_text(encoding="utf-8")
             )
-            preprocessing = run_config.get("preprocessing", {})
-            analyzer = preprocessing.get(
-                "analyzer",
-                getattr(
-                    trainer.preprocessor.pipeline.feature_extractor, "analyzer", "word"
-                ),
-            )
             feature_matrix = run_config.get("feature_matrix", {})
             feature_families = feature_matrix.get("feature_families")
             if not feature_families:
@@ -102,10 +91,8 @@ class TicketRoutingService:
             models[task_name] = LoadedTaskModel(
                 task_name=task_name,
                 run_id=spec["run_id"],
-                run_name=run_config["run"]["name"],
                 algorithm=run_config["model"]["algorithm"],
                 model_family=run_config["model"]["model_family"],
-                analyzer=analyzer,
                 feature_families=feature_families,
                 trainer=trainer,
             )
@@ -131,23 +118,13 @@ class TicketRoutingService:
         subject: str,
         body: str,
     ) -> dict[str, Any]:
-        frame = pd.DataFrame(
-            [
-                {
-                    "subject": subject,
-                    "body": body,
-                }
-            ]
-        )
+        frame = pd.DataFrame([{"subject": subject, "body": body}])
         predictions = {
             task_name: task_model.predict(frame)
             for task_name, task_model in self.models.items()
         }
         return {
-            "input": {
-                "subject": subject,
-                "body": body,
-            },
+            "input": {"subject": subject, "body": body},
             "predictions": predictions,
             "models": self.describe_models(),
         }

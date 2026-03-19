@@ -24,10 +24,8 @@ class TaskPredictionResponse(BaseModel):
 
 class TaskModelMetadataResponse(BaseModel):
     run_id: str
-    run_name: str
     algorithm: str
     model_family: str
-    analyzer: str
     feature_families: list[str]
 
 
