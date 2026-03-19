@@ -1,4 +1,4 @@
-﻿"""Classification training workflows."""
+"""Classification training workflows."""
 
 from __future__ import annotations
 
@@ -6,13 +6,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import pandas as pd
-from scipy.sparse import csr_matrix
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import LinearSVC
 
-from .evaluation import evaluate_fold, summarize_cv_results
+from .evaluation import FoldEvaluation, evaluate_fold, summarize_cv_results
 from .preprocessing import PriorityPreprocessor, QueuePreprocessor
-from .training_utils import HoldoutSplit, make_holdout_split
+from .training_utils import HoldoutSplit
 
 
 PREPROCESSOR_FACTORY = {
@@ -51,15 +50,10 @@ class ClassificationTrainer:
     task_name: str
     algorithm: str = "logreg"
     random_state: int = 42
-    test_size: float = 0.2
-    length_feature_enabled: bool = False
     model: LogisticRegression | LinearSVC = field(init=False)
     preprocessor: QueuePreprocessor | PriorityPreprocessor = field(init=False)
     feature_names_: list[str] = field(default_factory=list, init=False)
     target_mapping_: dict[int, str] = field(default_factory=dict, init=False)
-    _test_X: csr_matrix | None = field(default=None, init=False, repr=False)
-    _test_y: pd.Series | None = field(default=None, init=False, repr=False)
-    _test_predictions: pd.Series | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.task_name not in PREPROCESSOR_FACTORY:
@@ -74,44 +68,17 @@ class ClassificationTrainer:
             )
 
         self.model = self._build_model()
-        self.preprocessor = PREPROCESSOR_FACTORY[self.task_name](
-            length_feature_enabled=self.length_feature_enabled
-        )
+        self.preprocessor = PREPROCESSOR_FACTORY[self.task_name]()
 
-    def fit(self, df: pd.DataFrame) -> ClassificationTrainer:
-        target_column = self.preprocessor.pipeline.target_column
-        split = make_holdout_split(
-            frame=df,
-            target_column=target_column,
-            test_size=self.test_size,
-            random_state=self.random_state,
-            stratify=True,
-        )
-        return self.fit_on_split(split)
-
-    def fit_on_split(self, split: HoldoutSplit) -> ClassificationTrainer:
-        target_column = self.preprocessor.pipeline.target_column
-        train_data = self.preprocessor.fit_transform(split.train_df)
+    def fit_train(self, df: pd.DataFrame) -> ClassificationTrainer:
+        train_data = self.preprocessor.fit_transform(df)
         self.model.fit(train_data.X, train_data.y)
-
-        self._test_X = self.preprocessor.transform(split.test_df)
-        self._test_y = self.preprocessor.pipeline.target_encoder.transform(
-            split.test_df[target_column].reset_index(drop=True)
-        )
-        self._test_predictions = None
         self.feature_names_ = train_data.feature_names
         self.target_mapping_ = train_data.target_mapping or {}
         return self
 
     def fit_full(self, df: pd.DataFrame) -> ClassificationTrainer:
-        train_data = self.preprocessor.fit_transform(df)
-        self.model.fit(train_data.X, train_data.y)
-        self.feature_names_ = train_data.feature_names
-        self.target_mapping_ = train_data.target_mapping or {}
-        self._test_X = None
-        self._test_y = None
-        self._test_predictions = None
-        return self
+        return self.fit_train(df)
 
     def predict(self, df: pd.DataFrame) -> pd.Series:
         if not self.target_mapping_:
@@ -122,12 +89,6 @@ class ClassificationTrainer:
             lambda value: self.target_mapping_[int(value)]
         )
         return pd.Series(decoded, name=self.task_name)
-
-    def get_test_truth(self) -> pd.Series:
-        return self._require_test_y().copy()
-
-    def get_test_predictions(self) -> pd.Series:
-        return self._predict_current_split().copy()
 
     def get_label_order(self) -> list[int]:
         return sorted(self.target_mapping_)
@@ -192,23 +153,39 @@ class ClassificationTrainer:
             )
         raise ValueError(f"Unsupported algorithm '{self.algorithm}'.")
 
-    def _predict_current_split(self) -> pd.Series:
-        if self._test_predictions is None:
-            self._test_predictions = pd.Series(
-                self.model.predict(self._require_test_X()),
-                name=f"{self.task_name}_prediction",
-            )
-        return self._test_predictions
 
-    def _require_test_X(self) -> csr_matrix:
-        if self._test_X is None:
-            raise ValueError("Test features are unavailable. Fit the trainer first.")
-        return self._test_X
+def _evaluate_split(
+    *,
+    fold_index: int,
+    split: HoldoutSplit,
+    task_name: str,
+    algorithm: str,
+    random_state: int,
+) -> tuple[FoldEvaluation, ClassificationTrainer]:
+    trainer = ClassificationTrainer(
+        task_name=task_name,
+        algorithm=algorithm,
+        random_state=random_state,
+    )
+    trainer.fit_train(split.train_df)
 
-    def _require_test_y(self) -> pd.Series:
-        if self._test_y is None:
-            raise ValueError("Test targets are unavailable. Fit the trainer first.")
-        return self._test_y
+    target_column = trainer.get_target_column()
+    X_test = trainer.preprocessor.transform(split.test_df)
+    y_true = trainer.preprocessor.pipeline.target_encoder.transform(
+        split.test_df[target_column].reset_index(drop=True)
+    )
+    y_pred = pd.Series(
+        trainer.model.predict(X_test),
+        name=f"{task_name}_prediction",
+    )
+    fold_evaluation = evaluate_fold(
+        fold_index=fold_index,
+        y_true=y_true,
+        y_pred=y_pred,
+        label_ids=trainer.get_label_order(),
+        label_names=trainer.get_label_names(),
+    )
+    return fold_evaluation, trainer
 
 
 def evaluate_task(
@@ -216,29 +193,19 @@ def evaluate_task(
     folds: list[HoldoutSplit],
     random_state: int,
     algorithm: str,
-    length_feature_enabled: bool = True,
 ) -> dict[str, Any]:
     fold_evaluations = []
     trainer_config: dict[str, Any] | None = None
 
     for fold_index, split in enumerate(folds, start=1):
-        trainer = ClassificationTrainer(
+        fold_evaluation, trainer = _evaluate_split(
+            fold_index=fold_index,
+            split=split,
             task_name=task_name,
             algorithm=algorithm,
             random_state=random_state,
-            length_feature_enabled=length_feature_enabled,
         )
-        trainer.fit_on_split(split)
-
-        fold_evaluations.append(
-            evaluate_fold(
-                fold_index=fold_index,
-                y_true=trainer.get_test_truth(),
-                y_pred=trainer.get_test_predictions(),
-                label_ids=trainer.get_label_order(),
-                label_names=trainer.get_label_names(),
-            )
-        )
+        fold_evaluations.append(fold_evaluation)
 
         if trainer_config is None:
             trainer_config = {
@@ -257,13 +224,11 @@ def fit_final_model(
     df: pd.DataFrame,
     random_state: int,
     algorithm: str,
-    length_feature_enabled: bool = True,
 ) -> ClassificationTrainer:
     trainer = ClassificationTrainer(
         task_name=task_name,
         algorithm=algorithm,
         random_state=random_state,
-        length_feature_enabled=length_feature_enabled,
     )
     trainer.fit_full(df)
     return trainer

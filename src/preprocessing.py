@@ -1,4 +1,4 @@
-﻿"""Compact TF-IDF preprocessing for queue and priority classification."""
+"""Compact TF-IDF preprocessing for queue and priority classification."""
 
 from __future__ import annotations
 
@@ -11,12 +11,32 @@ import pandas as pd
 from scipy.sparse import csr_matrix, hstack
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import LabelEncoder
+from nltk.corpus import stopwords
+
+TFIDF_MAX_FEATURES = None
+TFIDF_MIN_DF = 1
+TFIDF_MAX_DF = 0.95
+TFIDF_NGRAM_RANGE = (1, 4)
+TFIDF_ANALYZER = "word"
+TFIDF_STOP_WORDS = None
+TFIDF_SUBLINEAR_TF = False
+
+STOP_WORD_LANGUAGE_BY_PREFIX = {
+    "de": "german",
+    "en": "english",
+}
+
+PRIORITY_CLASS_ORDER = ("low", "medium", "high")
+
+DEFAULT_LENGTH_FEATURE_ENABLED = False
+LENGTH_FEATURE_ENABLED_BY_TARGET = {
+    "queue": False,
+    "priority": False,
+}
 
 
 @lru_cache(maxsize=4)
 def _load_nltk_stop_words(language: str) -> frozenset[str]:
-    from nltk.corpus import stopwords
-
     return frozenset(stopwords.words(language))
 
 
@@ -91,10 +111,9 @@ class TextPreparationPipeline:
 
     @staticmethod
     def _get_stop_words(language: str) -> frozenset[str]:
-        if language.startswith("de"):
-            return _load_nltk_stop_words("german")
-        if language.startswith("en"):
-            return _load_nltk_stop_words("english")
+        for prefix, nltk_language in STOP_WORD_LANGUAGE_BY_PREFIX.items():
+            if language.startswith(prefix):
+                return _load_nltk_stop_words(nltk_language)
         return frozenset()
 
 
@@ -102,13 +121,13 @@ class TextPreparationPipeline:
 class TfidfFeatureExtractor:
     """Wrap a configured TF-IDF vectorizer."""
 
-    max_features: int = None
-    min_df: int = 1
-    max_df: float = 0.95
-    ngram_range: tuple[int, int] = (1, 4)
-    analyzer: str = "word"
-    stop_words: str | None = None
-    sublinear_tf: bool = False
+    max_features: int | None = TFIDF_MAX_FEATURES
+    min_df: int = TFIDF_MIN_DF
+    max_df: float = TFIDF_MAX_DF
+    ngram_range: tuple[int, int] = TFIDF_NGRAM_RANGE
+    analyzer: str = TFIDF_ANALYZER
+    stop_words: str | None = TFIDF_STOP_WORDS
+    sublinear_tf: bool = TFIDF_SUBLINEAR_TF
     vectorizer: TfidfVectorizer = field(init=False)
 
     def __post_init__(self) -> None:
@@ -206,7 +225,7 @@ class TfidfTargetPreprocessor:
     """Shared TF-IDF preprocessing logic for a single target."""
 
     target_column: str
-    length_feature_enabled: bool = True
+    length_feature_enabled: bool = DEFAULT_LENGTH_FEATURE_ENABLED
     text_pipeline: TextPreparationPipeline = field(
         default_factory=TextPreparationPipeline
     )
@@ -275,13 +294,12 @@ class TfidfTargetPreprocessor:
 class QueuePreprocessor:
     """Preprocessing workflow for queue prediction."""
 
-    length_feature_enabled: bool = True
     pipeline: TfidfTargetPreprocessor = field(init=False)
 
     def __post_init__(self) -> None:
         self.pipeline = TfidfTargetPreprocessor(
             target_column="queue",
-            length_feature_enabled=self.length_feature_enabled,
+            length_feature_enabled=LENGTH_FEATURE_ENABLED_BY_TARGET["queue"],
             target_encoder=TargetEncoder(),
         )
 
@@ -296,14 +314,13 @@ class QueuePreprocessor:
 class PriorityPreprocessor:
     """Preprocessing workflow for priority prediction."""
 
-    length_feature_enabled: bool = True
     pipeline: TfidfTargetPreprocessor = field(init=False)
 
     def __post_init__(self) -> None:
         self.pipeline = TfidfTargetPreprocessor(
             target_column="priority",
-            length_feature_enabled=self.length_feature_enabled,
-            target_encoder=OrderedTargetEncoder(("low", "medium", "high")),
+            length_feature_enabled=LENGTH_FEATURE_ENABLED_BY_TARGET["priority"],
+            target_encoder=OrderedTargetEncoder(PRIORITY_CLASS_ORDER),
         )
 
     def fit_transform(self, frame: pd.DataFrame) -> VectorizedDataset:

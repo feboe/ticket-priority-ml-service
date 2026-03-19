@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import json
 import re
 import tempfile
@@ -23,12 +22,10 @@ def start_run(run_name: str, nested: bool = False) -> Iterator[Any]:
         yield run
 
 
-
 def configure_tracking(tracking_uri: str, experiment_name: str) -> None:
     """Configure MLflow tracking and experiment selection."""
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(experiment_name)
-
 
 
 def build_base_run_name(
@@ -47,44 +44,36 @@ def build_base_run_name(
     return f"{safe_run_group}-{safe_dataset_id}-cv{cv_folds}-seed{seed}"
 
 
-
 def build_dataset_metadata(df: pd.DataFrame, data_path: Path) -> dict[str, Any]:
-    version_values = []
-    if "version" in df.columns:
-        version_values = sorted(df["version"].dropna().astype(str).unique().tolist())
-
     return {
-        "dataset_path": str(data_path.resolve()),
-        "dataset_name": data_path.name,
         "dataset_id": data_path.stem,
+        "dataset_path": str(data_path.resolve()),
         "dataset_row_count": int(len(df)),
-        "dataset_version_values": version_values,
     }
-
 
 
 def build_shared_tracking_payload(
     *,
-    args: argparse.Namespace,
+    run_group: str,
+    algorithm: str,
+    cv_folds: int,
+    random_state: int,
+    stratify_columns: list[str],
     dataset_metadata: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     params = {
-        "run_group": args.run_group,
-        "dataset": dataset_metadata["dataset_id"],
-        "dataset_name": dataset_metadata["dataset_name"],
+        "run_group": run_group,
         "dataset_id": dataset_metadata["dataset_id"],
         "dataset_row_count": dataset_metadata["dataset_row_count"],
-        "cv_folds": args.cv_folds,
-        "random_state": args.random_state,
-        "stratify_columns": ["queue", "priority"],
-        "model": args.algorithm,
-        "algorithm": args.algorithm,
+        "cv_folds": cv_folds,
+        "random_state": random_state,
+        "stratify_columns": stratify_columns,
+        "algorithm": algorithm,
     }
     tags = {
-        "run_group": args.run_group,
+        "run_group": run_group,
     }
     return params, tags
-
 
 
 def build_task_tracking_payload(
@@ -108,10 +97,11 @@ def build_task_tracking_payload(
     return params, tags
 
 
-
 def build_run_config(
     *,
-    args: argparse.Namespace,
+    run_group: str,
+    cv_folds: int,
+    random_state: int,
     task_name: str,
     task_results: dict[str, Any],
     dataset_metadata: dict[str, Any],
@@ -125,7 +115,7 @@ def build_run_config(
 
     return {
         "run": {
-            "group": args.run_group,
+            "group": run_group,
             "name": run_name,
         },
         "task": {
@@ -135,14 +125,12 @@ def build_run_config(
         },
         "dataset": {
             "id": dataset_metadata["dataset_id"],
-            "name": dataset_metadata["dataset_name"],
             "path": dataset_metadata["dataset_path"],
             "row_count": dataset_metadata["dataset_row_count"],
-            "version_values": dataset_metadata["dataset_version_values"],
         },
         "training": {
-            "cv_folds": args.cv_folds,
-            "random_state": args.random_state,
+            "cv_folds": cv_folds,
+            "random_state": random_state,
             "stratify_columns": stratify_columns,
         },
         "model": task_config["model"],
@@ -156,7 +144,6 @@ def build_run_config(
             "trained_model": "trained_model.joblib",
         },
     }
-
 
 
 def log_run_metadata(
@@ -187,7 +174,6 @@ def log_run_metadata(
             mlflow.log_metrics(normalized_metrics)
 
 
-
 def log_dataframe_artifact(frame: pd.DataFrame, artifact_file: str) -> None:
     """Persist a dataframe artifact to the active run."""
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -195,7 +181,6 @@ def log_dataframe_artifact(frame: pd.DataFrame, artifact_file: str) -> None:
         artifact_path.parent.mkdir(parents=True, exist_ok=True)
         frame.to_csv(artifact_path, index=False)
         _log_artifact(artifact_path, Path(temp_dir))
-
 
 
 def log_json_artifact(payload: Mapping[str, Any], artifact_file: str) -> None:
@@ -209,7 +194,6 @@ def log_json_artifact(payload: Mapping[str, Any], artifact_file: str) -> None:
         _log_artifact(artifact_path, Path(temp_dir))
 
 
-
 def log_model_artifact(
     model_object: Any, artifact_file: str = "trained_model.joblib"
 ) -> None:
@@ -221,12 +205,10 @@ def log_model_artifact(
         _log_artifact(artifact_path, Path(temp_dir))
 
 
-
 def _log_artifact(artifact_path: Path, temp_root: Path) -> None:
     relative_parent = artifact_path.parent.relative_to(temp_root)
     artifact_subdir = None if str(relative_parent) == "." else str(relative_parent)
     mlflow.log_artifact(str(artifact_path), artifact_path=artifact_subdir)
-
 
 
 def _stringify(value: Any) -> str:
@@ -235,7 +217,6 @@ def _stringify(value: Any) -> str:
     if isinstance(value, (list, tuple, set, dict)):
         return json.dumps(value, sort_keys=True)
     return str(value)
-
 
 
 def _slugify(value: str) -> str:

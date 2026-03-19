@@ -1,4 +1,4 @@
-﻿"""Top-level entrypoint for stratified cross-validation training."""
+"""Top-level entrypoint for stratified cross-validation training."""
 
 from __future__ import annotations
 
@@ -33,17 +33,6 @@ TASK_NAMES = ("queue", "priority")
 STRATIFY_TARGET_COLUMNS = ("queue", "priority")
 
 
-
-def _parse_bool(value: str) -> bool:
-    normalized = value.strip().lower()
-    if normalized in {"true", "1", "yes", "y"}:
-        return True
-    if normalized in {"false", "0", "no", "n"}:
-        return False
-    raise argparse.ArgumentTypeError("Expected one of: true, false, 1, 0, yes, no")
-
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run shared stratified cross-validation for queue and priority models."
@@ -74,12 +63,6 @@ def parse_args() -> argparse.Namespace:
         help="Classifier algorithm used for both tasks.",
     )
     parser.add_argument(
-        "--length-feature-enabled",
-        type=_parse_bool,
-        default=False,
-        help="Whether to append normalized ticket length as an extra feature.",
-    )
-    parser.add_argument(
         "--tracking-uri",
         type=str,
         default="file:./mlruns",
@@ -106,7 +89,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-
 def print_task_results(task_name: str, task_results: dict[str, Any]) -> None:
     metrics = task_results["overall_metrics"]
     print(task_name)
@@ -114,7 +96,6 @@ def print_task_results(task_name: str, task_results: dict[str, Any]) -> None:
     print(f"  cv_accuracy_std: {metrics['cv_accuracy_std']:.4f}")
     print(f"  cv_macro_f1_mean: {metrics['cv_macro_f1_mean']:.4f}")
     print(f"  cv_macro_f1_std: {metrics['cv_macro_f1_std']:.4f}")
-
 
 
 def main() -> None:
@@ -136,7 +117,11 @@ def main() -> None:
         run_name=args.run_name,
     )
     shared_params, shared_tags = build_shared_tracking_payload(
-        args=args,
+        run_group=args.run_group,
+        algorithm=args.algorithm,
+        cv_folds=args.cv_folds,
+        random_state=args.random_state,
+        stratify_columns=list(STRATIFY_TARGET_COLUMNS),
         dataset_metadata=dataset_metadata,
     )
 
@@ -147,14 +132,12 @@ def main() -> None:
             folds=folds,
             random_state=args.random_state,
             algorithm=args.algorithm,
-            length_feature_enabled=args.length_feature_enabled,
         )
         final_trainer = fit_final_model(
             task_name=task_name,
             df=df,
             random_state=args.random_state,
             algorithm=args.algorithm,
-            length_feature_enabled=args.length_feature_enabled,
         )
         print_task_results(task_name, task_results)
 
@@ -166,7 +149,9 @@ def main() -> None:
         task_tags = {**shared_tags, **task_tags}
         task_params = {**shared_params, **task_params}
         run_config = build_run_config(
-            args=args,
+            run_group=args.run_group,
+            cv_folds=args.cv_folds,
+            random_state=args.random_state,
             task_name=task_name,
             task_results=task_results,
             dataset_metadata=dataset_metadata,
