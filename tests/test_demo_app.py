@@ -40,7 +40,7 @@ class DemoApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertIn("title", payload)
-        self.assertEqual(set(payload["ticket"]), {"subject", "body"})
+        self.assertEqual(set(payload["ticket"]), {"subject", "body", "language"})
         self.assertGreater(payload["total"], 0)
 
     def test_predict_endpoint_returns_queue_and_priority_with_runner_up_and_gap(self) -> None:
@@ -49,12 +49,13 @@ class DemoApiTests(unittest.TestCase):
             json={
                 "subject": "Critical security incident affecting the account portal",
                 "body": "Users report suspicious activity and service disruption after repeated failed logins.",
+                "language": "en",
             },
         )
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(set(payload["predictions"]), {"queue", "priority"})
-        self.assertEqual(set(payload["input"]), {"subject", "body"})
+        self.assertEqual(set(payload["input"]), {"subject", "body", "language"})
         for task_name in ("queue", "priority"):
             task_payload = payload["predictions"][task_name]
             self.assertIn("runner_up_label", task_payload)
@@ -62,6 +63,27 @@ class DemoApiTests(unittest.TestCase):
             self.assertTrue(task_payload["label"])
             self.assertTrue(task_payload["runner_up_label"])
             self.assertNotEqual(task_payload["label"], task_payload["runner_up_label"])
+
+    def test_predict_endpoint_without_language_still_works(self) -> None:
+        response = self.client.post(
+            "/predict",
+            json={
+                "subject": "Need help with invoice mismatch",
+                "body": "The renewal invoice looks wrong and we need a billing review.",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(set(payload["input"]), {"subject", "body"})
+
+    def test_service_prediction_supports_german_language(self) -> None:
+        payload = self.service.predict_ticket(
+            subject="Dringender Sicherheitsvorfall im Kundenportal",
+            body="Mehrere Nutzer melden verdächtige Anmeldeversuche und den Ausfall des Kundenportals.",
+            language="de",
+        )
+        self.assertEqual(payload["input"]["language"], "de")
+        self.assertEqual(set(payload["predictions"]), {"queue", "priority"})
 
     def test_predict_endpoint_validates_missing_fields(self) -> None:
         response = self.client.post("/predict", json={"subject": "only subject"})
@@ -71,9 +93,11 @@ class DemoApiTests(unittest.TestCase):
         payload = self.service.predict_ticket(
             subject="Need help with invoice mismatch",
             body="The renewal invoice looks wrong and we need a billing review.",
+            language="en",
         )
         self.assertEqual(set(payload["models"]), {"queue", "priority"})
         self.assertEqual(set(payload["predictions"]), {"queue", "priority"})
+        self.assertEqual(payload["input"]["language"], "en")
         for metadata in payload["models"].values():
             self.assertEqual(
                 set(metadata),

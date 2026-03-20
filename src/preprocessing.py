@@ -37,7 +37,10 @@ LENGTH_FEATURE_ENABLED_BY_TARGET = {
 
 @lru_cache(maxsize=4)
 def _load_nltk_stop_words(language: str) -> frozenset[str]:
-    return frozenset(stopwords.words(language))
+    try:
+        return frozenset(stopwords.words(language))
+    except LookupError:
+        return frozenset()
 
 
 @dataclass

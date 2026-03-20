@@ -117,14 +117,21 @@ class TicketRoutingService:
         *,
         subject: str,
         body: str,
+        language: str | None = None,
     ) -> dict[str, Any]:
-        frame = pd.DataFrame([{"subject": subject, "body": body}])
+        row: dict[str, str] = {"subject": subject, "body": body}
+        if language:
+            row["language"] = language
+        frame = pd.DataFrame([row])
         predictions = {
             task_name: task_model.predict(frame)
             for task_name, task_model in self.models.items()
         }
+        input_payload: dict[str, str | None] = {"subject": subject, "body": body}
+        if language:
+            input_payload["language"] = language
         return {
-            "input": {"subject": subject, "body": body},
+            "input": input_payload,
             "predictions": predictions,
             "models": self.describe_models(),
         }

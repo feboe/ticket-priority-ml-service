@@ -80,6 +80,8 @@ def main() -> None:
         st.session_state.subject = ""
     if "body" not in st.session_state:
         st.session_state.body = ""
+    if "language" not in st.session_state:
+        st.session_state.language = ""
     if "prediction_response" not in st.session_state:
         st.session_state.prediction_response = None
     if "demo_title" not in st.session_state:
@@ -118,6 +120,7 @@ def main() -> None:
                     st.session_state.demo_index = demo_payload["index"] + 1
                     st.session_state.subject = demo_payload["ticket"]["subject"]
                     st.session_state.body = demo_payload["ticket"]["body"]
+                    st.session_state.language = demo_payload["ticket"].get("language", "")
                     st.session_state.demo_title = demo_payload["title"]
                 except requests.RequestException as exc:
                     st.error(f"Could not fetch demo ticket: {exc}")
@@ -128,15 +131,24 @@ def main() -> None:
         with st.form("ticket-input"):
             st.text_input("Subject", key="subject")
             st.text_area("Body", key="body", height=260)
+            st.selectbox(
+                "Language",
+                options=["", "en", "de"],
+                format_func=lambda value: value or "Auto / not provided",
+                key="language",
+            )
             submitted = st.form_submit_button("Predict Ticket", use_container_width=True)
 
         if submitted:
             try:
+                payload = {
+                    "subject": st.session_state.subject,
+                    "body": st.session_state.body,
+                }
+                if st.session_state.language:
+                    payload["language"] = st.session_state.language
                 st.session_state.prediction_response = request_prediction(
-                    {
-                        "subject": st.session_state.subject,
-                        "body": st.session_state.body,
-                    },
+                    payload,
                     base_url,
                 )
             except requests.RequestException as exc:

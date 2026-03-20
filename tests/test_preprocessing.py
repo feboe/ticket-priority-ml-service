@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -37,6 +38,15 @@ class TextPreparationPipelineTests(unittest.TestCase):
         )
 
         self.assertEqual(normalized, "contact email at url about ticket number")
+
+    def test_normalize_text_falls_back_when_nltk_stopwords_are_unavailable(self) -> None:
+        with patch("src.preprocessing.stopwords.words", side_effect=LookupError):
+            normalized = TextPreparationPipeline._normalize_text(
+                "This is an urgent billing issue",
+                language="en",
+            )
+
+        self.assertEqual(normalized, "this is an urgent billing issue")
 
 
 class TargetPreprocessorContractTests(unittest.TestCase):

@@ -14,6 +14,7 @@ from app.service import TicketRoutingService, get_default_service
 class TicketRequest(BaseModel):
     subject: str = Field(..., min_length=1)
     body: str = Field(..., min_length=1)
+    language: str | None = None
 
 
 class TaskPredictionResponse(BaseModel):
@@ -30,7 +31,7 @@ class TaskModelMetadataResponse(BaseModel):
 
 
 class PredictResponse(BaseModel):
-    input: dict[str, str]
+    input: dict[str, str | None]
     predictions: dict[str, TaskPredictionResponse]
     models: dict[str, TaskModelMetadataResponse]
 
@@ -45,7 +46,7 @@ class DemoTicketResponse(BaseModel):
     index: int
     total: int
     title: str
-    ticket: dict[str, str]
+    ticket: dict[str, str | None]
 
 
 def create_app(service: TicketRoutingService | None = None) -> FastAPI:
@@ -72,6 +73,7 @@ def create_app(service: TicketRoutingService | None = None) -> FastAPI:
         return resolved_service.predict_ticket(
             subject=request.subject,
             body=request.body,
+            language=request.language,
         )
 
     return app
