@@ -16,7 +16,7 @@ from nltk.corpus import stopwords
 TFIDF_MAX_FEATURES = None
 TFIDF_MIN_DF = 1
 TFIDF_MAX_DF = 0.95
-TFIDF_NGRAM_RANGE = (1, 4)
+TFIDF_NGRAM_RANGE = (1, 3)
 TFIDF_ANALYZER = "word"
 TFIDF_STOP_WORDS = None
 TFIDF_SUBLINEAR_TF = False

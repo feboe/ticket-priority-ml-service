@@ -32,13 +32,13 @@ C_BY_ALGORITHM_AND_TASK = {
         "priority": 2.0,
     },
     "linear_svc": {
-        "queue": 8.0,
-        "priority": 4.0,
+        "queue": 16.0,
+        "priority": 12.0,
     },
 }
 
 MAX_ITER_BY_ALGORITHM = {
-    "logreg": 2000,
+    "logreg": 5000,
     "linear_svc": 5000,
 }
 
