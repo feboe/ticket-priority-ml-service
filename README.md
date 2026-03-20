@@ -116,7 +116,7 @@ The serving models are versioned with Git LFS.
 
 ```powershell
 git lfs install
-git clone <your-repo-url>
+git clone git@github.com:feboe/ticket-priority-ml-service.git
 cd ticket-priority-ml-service
 git lfs pull
 ```
