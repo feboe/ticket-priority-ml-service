@@ -39,7 +39,7 @@ def build_smoke_dataset(csv_path: Path, repeats: int = 3) -> None:
                         "body": f"body {queue_label} {priority_label} sample {repeat_index}",
                         "queue": queue_label,
                         "priority": priority_label,
-                        "language": "unknown",
+                        "language": "en" if (index + repeat_index) % 2 == 0 else "de",
                         "version": "smoke",
                     }
                 )

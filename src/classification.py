@@ -184,6 +184,7 @@ def _evaluate_split(
         y_pred=y_pred,
         label_ids=trainer.get_label_order(),
         label_names=trainer.get_label_names(),
+        languages=split.test_df.get("language"),
     )
     return fold_evaluation, trainer
 

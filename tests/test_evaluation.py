@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import unittest
 
@@ -35,6 +35,21 @@ class EvaluationModuleTests(unittest.TestCase):
         self.assertEqual(int(high_confusion["fp"]), 0)
         self.assertEqual(int(high_confusion["fn"]), 0)
         self.assertEqual(int(high_confusion["tn"]), 4)
+
+    def test_evaluate_fold_builds_language_metrics_when_languages_are_provided(self) -> None:
+        result = evaluate_fold(
+            fold_index=1,
+            y_true=[0, 0, 1, 1],
+            y_pred=[0, 1, 1, 1],
+            label_ids=self.label_ids,
+            label_names=self.label_names,
+            languages=["en", "en", "de", "de"],
+        )
+
+        self.assertEqual(result.language_metrics["language"].tolist(), ["en", "de"])
+        self.assertEqual(result.language_metrics["sample_count"].tolist(), [2, 2])
+        self.assertAlmostEqual(float(result.language_metrics.iloc[0]["accuracy"]), 0.5)
+        self.assertAlmostEqual(float(result.language_metrics.iloc[1]["accuracy"]), 1.0)
 
     def test_summarize_cv_results_computes_overall_mean_std_and_per_class_metrics(self) -> None:
         fold_one = evaluate_fold(
@@ -98,7 +113,36 @@ class EvaluationModuleTests(unittest.TestCase):
         self.assertAlmostEqual(float(high_row["tn_mean"]), 2.5)
         self.assertAlmostEqual(float(high_row["tn_std"]), 1.5)
 
+    def test_summarize_cv_results_aggregates_language_metrics_and_flattens_mlflow_keys(self) -> None:
+        fold_one = evaluate_fold(
+            fold_index=1,
+            y_true=[0, 0, 1, 1],
+            y_pred=[0, 1, 1, 1],
+            label_ids=self.label_ids,
+            label_names=self.label_names,
+            languages=["en", "en", "de", "de"],
+        )
+        fold_two = evaluate_fold(
+            fold_index=2,
+            y_true=[0, 1, 2, 2],
+            y_pred=[0, 2, 2, 1],
+            label_ids=self.label_ids,
+            label_names=self.label_names,
+            languages=["en", "de", "en", "de"],
+        )
+
+        summary = summarize_cv_results([fold_one, fold_two])
+        language_metrics = summary["language_metrics"].set_index("language")
+
+        self.assertEqual(language_metrics.index.tolist(), ["en", "de"])
+        self.assertAlmostEqual(float(language_metrics.loc["en", "accuracy_mean"]), 0.75)
+        self.assertAlmostEqual(float(language_metrics.loc["en", "accuracy_std"]), 0.25)
+        self.assertAlmostEqual(float(language_metrics.loc["de", "accuracy_mean"]), 0.5)
+        self.assertAlmostEqual(float(language_metrics.loc["de", "accuracy_std"]), 0.5)
+        self.assertAlmostEqual(float(language_metrics.loc["en", "sample_count_mean"]), 2.0)
+        self.assertIn("cv_accuracy_mean__lang_en", summary["mlflow_metrics"])
+        self.assertIn("cv_macro_f1_mean__lang_de", summary["mlflow_metrics"])
+
 
 if __name__ == "__main__":
     unittest.main()
-

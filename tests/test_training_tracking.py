@@ -85,6 +85,10 @@ class TrainingTrackingSmokeTests(unittest.TestCase):
                             for column in runs.columns
                         )
                     )
+                    self.assertIn("metrics.cv_accuracy_mean__lang_en", runs.columns)
+                    self.assertIn("metrics.cv_accuracy_mean__lang_de", runs.columns)
+                    self.assertIn("metrics.cv_macro_f1_mean__lang_en", runs.columns)
+                    self.assertIn("metrics.cv_macro_f1_mean__lang_de", runs.columns)
 
                     for run_id in runs["run_id"].tolist():
                         run = mlflow.get_run(run_id)
@@ -102,6 +106,7 @@ class TrainingTrackingSmokeTests(unittest.TestCase):
                             (artifact_root / "confusion_matrix_std.csv").exists()
                         )
                         self.assertTrue((artifact_root / "run_config.json").exists())
+                        self.assertTrue((artifact_root / "language_metrics.csv").exists())
                         self.assertTrue(model_path.exists())
 
                         run_config = json.loads(
@@ -143,6 +148,11 @@ class TrainingTrackingSmokeTests(unittest.TestCase):
                         self.assertEqual(
                             run_config["feature_matrix"]["feature_families"], ["tfidf"]
                         )
+                        language_metrics_csv = (artifact_root / "language_metrics.csv").read_text(
+                            encoding="utf-8"
+                        )
+                        self.assertIn("en", language_metrics_csv)
+                        self.assertIn("de", language_metrics_csv)
                         self.assertNotIn("shared_metadata", run_config)
                         self.assertNotIn("tracking", run_config)
 

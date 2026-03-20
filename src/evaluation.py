@@ -1,4 +1,4 @@
-﻿"""Evaluation helpers for fold and cross-validation reporting."""
+"""Evaluation helpers for fold and cross-validation reporting."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ class FoldEvaluation:
     """Structured evaluation outputs for a single held-out fold."""
 
     fold_metrics: dict[str, int | float]
+    language_metrics: pd.DataFrame
     per_class_metrics: pd.DataFrame
     confusion_matrix: pd.DataFrame
     per_class_confusion: pd.DataFrame
@@ -31,6 +32,7 @@ def evaluate_fold(
     y_pred: pd.Series,
     label_ids: Sequence[int],
     label_names: Sequence[str],
+    languages: pd.Series | Sequence[str] | None = None,
 ) -> FoldEvaluation:
     """Compute scalar, per-class, and confusion metrics for one fold."""
     labels = list(label_ids)
@@ -45,6 +47,13 @@ def evaluate_fold(
             f1_score(truth, predictions, labels=labels, average="macro", zero_division=0)
         ),
     }
+    language_metrics = _build_language_metrics(
+        fold_index=fold_index,
+        truth=truth,
+        predictions=predictions,
+        labels=labels,
+        languages=languages,
+    )
 
     precision, recall, f1_values, support = precision_recall_fscore_support(
         truth,
@@ -101,6 +110,7 @@ def evaluate_fold(
 
     return FoldEvaluation(
         fold_metrics=fold_metrics,
+        language_metrics=language_metrics,
         per_class_metrics=per_class_metrics,
         confusion_matrix=pd.DataFrame(confusion_rows),
         per_class_confusion=pd.DataFrame(per_class_confusion_rows),
@@ -116,6 +126,10 @@ def summarize_cv_results(fold_evaluations: Sequence[FoldEvaluation]) -> dict[str
         pd.DataFrame([evaluation.fold_metrics for evaluation in fold_evaluations])
         .sort_values("fold")
         .reset_index(drop=True)
+    )
+    language_metrics = pd.concat(
+        [evaluation.language_metrics for evaluation in fold_evaluations],
+        ignore_index=True,
     )
     per_class_metrics = pd.concat(
         [evaluation.per_class_metrics for evaluation in fold_evaluations],
@@ -136,6 +150,7 @@ def summarize_cv_results(fold_evaluations: Sequence[FoldEvaluation]) -> dict[str
         "cv_macro_f1_mean": float(fold_metrics["macro_f1"].mean()),
         "cv_macro_f1_std": float(fold_metrics["macro_f1"].std(ddof=0)),
     }
+    language_summary = _summarize_language_metrics(language_metrics)
 
     per_class_summary = (
         per_class_metrics.groupby(["label_id", "label"], sort=False)
@@ -192,6 +207,7 @@ def summarize_cv_results(fold_evaluations: Sequence[FoldEvaluation]) -> dict[str
 
     mlflow_metrics = {
         **overall_metrics,
+        **_flatten_language_metrics(language_summary),
         **_flatten_per_class_metrics(per_class_summary),
         **_flatten_per_class_confusion_metrics(per_class_confusion_summary),
     }
@@ -199,6 +215,7 @@ def summarize_cv_results(fold_evaluations: Sequence[FoldEvaluation]) -> dict[str
     return {
         "overall_metrics": overall_metrics,
         "mlflow_metrics": mlflow_metrics,
+        "language_metrics": language_summary,
         "per_class_metrics": per_class_summary,
         "per_class_confusion": per_class_confusion_summary,
         "confusion_matrix_mean": confusion_matrix_mean,
@@ -218,6 +235,19 @@ def _flatten_per_class_metrics(per_class_summary: pd.DataFrame) -> dict[str, flo
         metrics[f"cv_f1_std__{label_slug}"] = float(row.f1_std)
         metrics[f"cv_support_mean__{label_slug}"] = float(row.support_mean)
         metrics[f"cv_support_std__{label_slug}"] = float(row.support_std)
+    return metrics
+
+
+def _flatten_language_metrics(language_summary: pd.DataFrame) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+    for row in language_summary.itertuples(index=False):
+        language_slug = _slugify(row.language)
+        metrics[f"cv_accuracy_mean__lang_{language_slug}"] = float(row.accuracy_mean)
+        metrics[f"cv_accuracy_std__lang_{language_slug}"] = float(row.accuracy_std)
+        metrics[f"cv_macro_f1_mean__lang_{language_slug}"] = float(row.macro_f1_mean)
+        metrics[f"cv_macro_f1_std__lang_{language_slug}"] = float(row.macro_f1_std)
+        metrics[f"cv_sample_count_mean__lang_{language_slug}"] = float(row.sample_count_mean)
+        metrics[f"cv_sample_count_std__lang_{language_slug}"] = float(row.sample_count_std)
     return metrics
 
 
@@ -253,6 +283,84 @@ def _pivot_confusion_summary(
     )
     matrix.index.name = "actual_label"
     return matrix.reset_index()
+
+
+def _build_language_metrics(
+    *,
+    fold_index: int,
+    truth: pd.Series,
+    predictions: pd.Series,
+    labels: Sequence[int],
+    languages: pd.Series | Sequence[str] | None,
+) -> pd.DataFrame:
+    if languages is None:
+        return pd.DataFrame(
+            columns=["fold", "language", "accuracy", "macro_f1", "sample_count"]
+        )
+
+    language_series = (
+        pd.Series(languages)
+        .reset_index(drop=True)
+        .fillna("unknown")
+        .astype(str)
+        .str.lower()
+        .str.strip()
+    )
+    language_series = language_series.mask(language_series.eq(""), "unknown")
+    if len(language_series) != len(truth):
+        raise ValueError("Language values must match the number of truth labels.")
+
+    metrics_rows: list[dict[str, int | float | str]] = []
+    for language in language_series.drop_duplicates().tolist():
+        mask = language_series == language
+        truth_subset = truth[mask]
+        prediction_subset = predictions[mask]
+        metrics_rows.append(
+            {
+                "fold": fold_index,
+                "language": language,
+                "accuracy": float(accuracy_score(truth_subset, prediction_subset)),
+                "macro_f1": float(
+                    f1_score(
+                        truth_subset,
+                        prediction_subset,
+                        labels=list(labels),
+                        average="macro",
+                        zero_division=0,
+                    )
+                ),
+                "sample_count": int(mask.sum()),
+            }
+        )
+    return pd.DataFrame(metrics_rows)
+
+
+def _summarize_language_metrics(language_metrics: pd.DataFrame) -> pd.DataFrame:
+    if language_metrics.empty:
+        return pd.DataFrame(
+            columns=[
+                "language",
+                "accuracy_mean",
+                "accuracy_std",
+                "macro_f1_mean",
+                "macro_f1_std",
+                "sample_count_mean",
+                "sample_count_std",
+            ]
+        )
+
+    return (
+        language_metrics.groupby("language", sort=False)
+        .agg(
+            accuracy_mean=("accuracy", "mean"),
+            accuracy_std=("accuracy", lambda values: float(values.std(ddof=0))),
+            macro_f1_mean=("macro_f1", "mean"),
+            macro_f1_std=("macro_f1", lambda values: float(values.std(ddof=0))),
+            sample_count_mean=("sample_count", "mean"),
+            sample_count_std=("sample_count", lambda values: float(values.std(ddof=0))),
+        )
+        .reset_index()
+    )
 
 
 def _slugify(value: str) -> str:

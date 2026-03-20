@@ -178,6 +178,9 @@ def main() -> None:
             log_dataframe_artifact(
                 task_results["confusion_matrix_std"], "confusion_matrix_std.csv"
             )
+            log_dataframe_artifact(
+                task_results["language_metrics"], "language_metrics.csv"
+            )
             log_json_artifact(run_config, "run_config.json")
             log_model_artifact(final_trainer, "trained_model.joblib")
 
