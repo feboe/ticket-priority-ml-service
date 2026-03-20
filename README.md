@@ -1,15 +1,27 @@
 # Ticket Priority ML Service
 
-This repository implements a classical Machine Learning pipeline for automatic support-ticket triage. It predicts two outputs from ticket text: the operational `queue` and the business `priority`. The project includes bilingual training data (English and German), MLflow-based experiment tracking, fixed serving assets, a FastAPI inference service, a Streamlit demo UI, and Docker packaging.
+This repository is an end-to-end applied machine learning project for support-ticket triage. It trains classical text classifiers that predict both the operational `queue` and business `priority`, tracks experiments in MLflow, ships fixed demo serving assets, and exposes the promoted models through a FastAPI service, a Streamlit demo UI, and Docker packaging.
 
-## Key Features
+## What This Repository Demonstrates
 
-- Dual-output ticket classification: `queue` and `priority`
-- English and German ticket handling
-- MLflow experiment tracking with saved artifacts and run configs
-- FastAPI inference service with fixed promoted models
-- Streamlit demo UI for manual testing and demo tickets
-- Dockerized single-container MVP
+- bilingual ticket preprocessing for English and German support data
+- shared cross-validation and experiment tracking for dual-output classification
+- fixed serving assets for a runnable demo plus a separate training workflow for experimentation
+- FastAPI inference serving with a Streamlit front end for manual inspection
+- Docker packaging for a self-contained MVP
+
+## Quick Start
+
+For the fastest local demo path:
+
+1. Clone the repository with Git LFS enabled.
+2. Create and activate a virtual environment.
+3. Install `requirements-app.txt`.
+4. Download the NLTK stopword corpus.
+5. Start FastAPI, then start Streamlit.
+6. Open `http://127.0.0.1:8501` for the UI or `http://127.0.0.1:8000/docs` for the API docs.
+
+Detailed setup, testing, and training notes are below.
 
 ## Problem Statement / Use Case
 
@@ -30,6 +42,13 @@ Source:
 
 - based on the Kaggle dataset *Multilingual Customer Support Tickets* by Tobias Bueck: <https://www.kaggle.com/datasets/tobiasbueck/multilingual-customer-support-tickets>
 - dataset license: `CC BY-NC 4.0`
+
+## Model Provenance / License Scope
+
+- The source code in this repository is released under the MIT License in [LICENSE](LICENSE).
+- The referenced training dataset is sourced from Kaggle and listed there as `CC BY-NC 4.0`.
+- The checked-in assets under [`serving_assets/`](serving_assets/) are kept as demo artifacts so the repository stays runnable as a portfolio project.
+- Reuse of the dataset or derived serving artifacts should be reviewed against the upstream dataset terms; they are not relicensed under the repository's MIT license.
 
 Input fields used by the model:
 
@@ -122,7 +141,7 @@ Training runs are logged to MLflow from [`train.py`](train.py), including:
 - run configuration JSON
 - final serialized model artifact
 
-The promoted serving assets were extracted from MLflow and stored under [`serving_assets/`](serving_assets/).
+The published demo does not serve "latest run wins" artifacts. FastAPI and Streamlit load the fixed checked-in assets under [`serving_assets/`](serving_assets/), while training produces candidate MLflow artifacts for comparison and review.
 
 ### Selected Experiments
 
@@ -216,6 +235,9 @@ Tracked project structure:
 
 ```text
 .
+|-- .github/
+|   `-- workflows/
+|       `-- ci.yml
 |-- app/
 |   |-- api.py
 |   |-- demo_tickets.py
@@ -246,6 +268,7 @@ Tracked project structure:
 |-- .gitattributes
 |-- .gitignore
 |-- Dockerfile
+|-- LICENSE
 |-- requirements-app.txt
 |-- requirements.txt
 |-- start.sh
@@ -296,7 +319,19 @@ pip install -r requirements-app.txt
 
 The app now fails gracefully if the corpus is missing, but the download is still required to enable English/German stop-word filtering.
 
+## Testing
+
+With the complete development environment from [`requirements.txt`](requirements.txt), run:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+GitHub Actions uses the same full test command and installs the full development dependencies, including `mlflow`, so the public CI run exercises the training and tracking smoke path as well.
+
 ## Run Locally
+
+The demo application serves the fixed promoted models from [`serving_assets/`](serving_assets/).
 
 Start the FastAPI service:
 
@@ -319,12 +354,14 @@ Endpoints:
 
 ### Training
 
-Run a full training pass with MLflow logging:
+Run a full training pass to create MLflow-tracked candidate models and metrics:
 
 ```powershell
 .\.venv\Scripts\python train.py --algorithm linear_svc --run-group algo-benchmark-v1
 .\.venv\Scripts\python -m mlflow ui --backend-store-uri .\mlruns
 ```
+
+Running `train.py` does not update the demo automatically. Promoting selected MLflow artifacts into [`serving_assets/`](serving_assets/) is a maintainer-only release step handled separately.
 
 ## Run with Docker
 

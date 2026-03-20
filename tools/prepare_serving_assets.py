@@ -1,4 +1,4 @@
-﻿"""Prepare fixed serving assets from selected MLflow runs."""
+"""Internal helper for promoting selected MLflow run artifacts into serving assets."""
 
 from __future__ import annotations
 
