@@ -58,6 +58,5 @@ Desktop.ini
 data/
 notebooks/
 artifacts/
-models/
 outputs/
 mlruns/
