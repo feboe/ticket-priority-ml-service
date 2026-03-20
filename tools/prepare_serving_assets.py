@@ -8,10 +8,10 @@ from pathlib import Path
 
 import joblib
 
-EXPERIMENT_ID = "889656232015600132"
+EXPERIMENT_ID = "167858914656602414"
 SELECTED_RUNS = {
-    "queue": "08767b25d399410bb4d9d819c0d8fceb",
-    "priority": "d7faa4f8e38c4345b8abc295be5db18a",
+    "queue": "7db335f24d524827aa3f27bba2aa8d8d",
+    "priority": "5b3febadbb894da28b181a253e99ef56",
 }
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +25,10 @@ def _normalize_run_config(
     run_config: dict[str, object], trainer: object
 ) -> dict[str, object]:
     normalized = dict(run_config)
+    dataset = dict(normalized.get("dataset", {}))
+    dataset.pop("path", None)
+    normalized["dataset"] = dataset
+
     preprocessing = dict(normalized.get("preprocessing", {}))
     preprocessing.setdefault(
         "analyzer",

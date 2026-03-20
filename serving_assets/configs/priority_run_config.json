@@ -1,0 +1,53 @@
+{
+  "artifacts": {
+    "trained_model": "trained_model.joblib"
+  },
+  "dataset": {
+    "id": "aa_dataset-tickets-multi-lang-5-2-50-version",
+    "row_count": 28587
+  },
+  "feature_matrix": {
+    "columns": 792218,
+    "feature_families": [
+      "tfidf"
+    ],
+    "rows": 28587
+  },
+  "model": {
+    "C": 12.0,
+    "algorithm": "linear_svc",
+    "class_weight": "balanced",
+    "max_iter": 5000,
+    "model_family": "LinearSVC"
+  },
+  "preprocessing": {
+    "analyzer": "word",
+    "length_feature_enabled": false,
+    "max_df": 0.95,
+    "min_df": 1,
+    "ngram_max": 3,
+    "ngram_min": 1,
+    "sublinear_tf": false
+  },
+  "run": {
+    "group": "algo-benchmark-v1",
+    "name": "linearsvc_1to3_Cq16p12::linear_svc::priority"
+  },
+  "task": {
+    "labels": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "name": "priority",
+    "target_column": "priority"
+  },
+  "training": {
+    "cv_folds": 5,
+    "random_state": 42,
+    "stratify_columns": [
+      "queue",
+      "priority"
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "app": {
+    "title": "Ticket Triage Demo"
+  },
+  "models": {
+    "priority": {
+      "model_path": "models/priority_model.joblib",
+      "run_config_path": "configs/priority_run_config.json",
+      "run_id": "5b3febadbb894da28b181a253e99ef56"
+    },
+    "queue": {
+      "model_path": "models/queue_model.joblib",
+      "run_config_path": "configs/queue_run_config.json",
+      "run_id": "7db335f24d524827aa3f27bba2aa8d8d"
+    }
+  }
+}
