@@ -9,10 +9,24 @@ from src.preprocessing import (
     PriorityPreprocessor,
     QueuePreprocessor,
     TextPreparationPipeline,
+    _load_nltk_stop_words,
 )
 
 
-class TextPreparationPipelineTests(unittest.TestCase):
+def _clear_stopword_cache() -> None:
+    _load_nltk_stop_words.cache_clear()
+
+
+class StopWordCacheIsolationTestCase(unittest.TestCase):
+    def setUp(self) -> None:
+        _clear_stopword_cache()
+
+    def tearDown(self) -> None:
+        _clear_stopword_cache()
+
+
+class TextPreparationPipelineTests(StopWordCacheIsolationTestCase):
+
     def test_missing_body_column_raises_key_error(self) -> None:
         pipeline = TextPreparationPipeline()
 
@@ -40,17 +54,22 @@ class TextPreparationPipelineTests(unittest.TestCase):
         self.assertEqual(normalized, "contact email at url about ticket number")
 
     def test_normalize_text_falls_back_when_nltk_stopwords_are_unavailable(self) -> None:
-        with patch("src.preprocessing.stopwords.words", side_effect=LookupError):
+        _clear_stopword_cache()
+        with patch(
+            "src.preprocessing.stopwords.words", side_effect=LookupError
+        ) as mocked_lookup:
             normalized = TextPreparationPipeline._normalize_text(
                 "This is an urgent billing issue",
                 language="en",
             )
 
+        self.assertEqual(mocked_lookup.call_count, 1)
         self.assertEqual(normalized, "this is an urgent billing issue")
 
 
-class TargetPreprocessorContractTests(unittest.TestCase):
+class TargetPreprocessorContractTests(StopWordCacheIsolationTestCase):
     def setUp(self) -> None:
+        super().setUp()
         self.queue_frame = pd.DataFrame(
             {
                 "subject": ["printer issue", "billing help"],
