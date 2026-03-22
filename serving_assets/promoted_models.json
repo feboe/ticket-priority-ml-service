@@ -1,0 +1,106 @@
+{
+  "priority": {
+    "dataset": {
+      "id": "aa_dataset-tickets-multi-lang-5-2-50-version",
+      "row_count": 28587
+    },
+    "docs_artifacts": {
+      "confusion_matrix_path": "priority-confusion-matrix.png"
+    },
+    "feature_matrix": {
+      "columns": 792218,
+      "feature_families": [
+        "tfidf"
+      ],
+      "rows": 28587
+    },
+    "headline_metrics": {
+      "accuracy_mean": 0.7204318802014305,
+      "accuracy_std": 0.007371479571060056,
+      "macro_f1_mean": 0.7107658176802688,
+      "macro_f1_std": 0.00809365380790112
+    },
+    "model": {
+      "C": 12.0,
+      "algorithm": "linear_svc",
+      "class_weight": "balanced",
+      "max_iter": 5000,
+      "model_family": "LinearSVC"
+    },
+    "preprocessing": {
+      "analyzer": "word",
+      "length_feature_enabled": false,
+      "max_df": 0.95,
+      "min_df": 1,
+      "ngram_max": 3,
+      "ngram_min": 1,
+      "sublinear_tf": false
+    },
+    "run_id": "5b3febadbb894da28b181a253e99ef56",
+    "serving_artifacts": {
+      "model_path": "models/priority_model.joblib",
+      "run_config_path": "configs/priority_run_config.json"
+    },
+    "training": {
+      "cv_folds": 5,
+      "random_state": 42,
+      "stratify_columns": [
+        "queue",
+        "priority"
+      ]
+    }
+  },
+  "queue": {
+    "dataset": {
+      "id": "aa_dataset-tickets-multi-lang-5-2-50-version",
+      "row_count": 28587
+    },
+    "docs_artifacts": {
+      "confusion_matrix_path": "queue-confusion-matrix.png"
+    },
+    "feature_matrix": {
+      "columns": 792218,
+      "feature_families": [
+        "tfidf"
+      ],
+      "rows": 28587
+    },
+    "headline_metrics": {
+      "accuracy_mean": 0.6891944479572623,
+      "accuracy_std": 0.002916087895993389,
+      "macro_f1_mean": 0.6854061351849202,
+      "macro_f1_std": 0.00411202662794394
+    },
+    "model": {
+      "C": 16.0,
+      "algorithm": "linear_svc",
+      "class_weight": "balanced",
+      "max_iter": 5000,
+      "model_family": "LinearSVC"
+    },
+    "preprocessing": {
+      "analyzer": "word",
+      "length_feature_enabled": false,
+      "max_df": 0.95,
+      "min_df": 1,
+      "ngram_max": 3,
+      "ngram_min": 1,
+      "sublinear_tf": false
+    },
+    "run_id": "7db335f24d524827aa3f27bba2aa8d8d",
+    "serving_artifacts": {
+      "model_path": "models/queue_model.joblib",
+      "run_config_path": "configs/queue_run_config.json"
+    },
+    "training": {
+      "cv_folds": 5,
+      "random_state": 42,
+      "stratify_columns": [
+        "queue",
+        "priority"
+      ]
+    }
+  },
+  "serving_config_path": "serving_config.json",
+  "tracking_experiment_id": "167858914656602414"
+}
