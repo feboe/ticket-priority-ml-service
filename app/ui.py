@@ -49,7 +49,11 @@ def _render_prediction_card(task_name: str, prediction: dict[str, Any]) -> None:
         st.markdown(f"### {title}")
         st.write(f"**Prediction:** {prediction['label']}")
         st.write(f"**Runner-up:** {prediction['runner_up_label']}")
-        st.caption(f"Decision margin gap: {prediction['margin_gap']:.3f}")
+        st.caption(f"Relative confidence gap: {prediction['margin_gap']:.3f}")
+        st.caption(
+            "Compares the top prediction with the next-best alternative for this ticket. "
+            "Useful as a relative signal, not an absolute confidence score."
+        )
 
 
 def _render_model_metadata(models: dict[str, Any]) -> None:
@@ -57,11 +61,17 @@ def _render_model_metadata(models: dict[str, Any]) -> None:
         for task_name, metadata in models.items():
             with st.container(border=True):
                 st.write(f"**{task_name.title()} model**")
-                st.write(f"Run id: `{metadata['run_id']}`")
                 st.write(
-                    f"Algorithm: `{metadata['algorithm']}` ({metadata['model_family']})"
+                    f"Model: `{metadata['model_family']}` (`{metadata['algorithm']}`, C={metadata['c']:g})"
                 )
-                st.write("Feature families: " + ", ".join(metadata["feature_families"]))
+                st.write(f"Features: {metadata['feature_summary']}")
+                st.write(
+                    "CV metrics: "
+                    f"macro F1 `{metadata['cv_macro_f1_mean']:.3f}`"
+                    f" | accuracy `{metadata['cv_accuracy_mean']:.3f}`"
+                )
+                st.write(f"Dataset: `{metadata['dataset_id']}`")
+                st.caption(f"Run id: `{metadata['run_id']}`")
 
 
 def main() -> None:

@@ -27,7 +27,11 @@ class TaskModelMetadataResponse(BaseModel):
     run_id: str
     algorithm: str
     model_family: str
-    feature_families: list[str]
+    c: float
+    feature_summary: str
+    dataset_id: str
+    cv_macro_f1_mean: float
+    cv_accuracy_mean: float
 
 
 class PredictResponse(BaseModel):

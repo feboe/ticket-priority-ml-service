@@ -23,7 +23,11 @@ class LoadedTaskModel:
     run_id: str
     algorithm: str
     model_family: str
-    feature_families: list[str]
+    c: float
+    feature_summary: str
+    dataset_id: str
+    cv_macro_f1_mean: float
+    cv_accuracy_mean: float
     trainer: Any
 
     def predict(self, frame: pd.DataFrame) -> dict[str, Any]:
@@ -57,8 +61,35 @@ class LoadedTaskModel:
             "run_id": self.run_id,
             "algorithm": self.algorithm,
             "model_family": self.model_family,
-            "feature_families": self.feature_families,
+            "c": self.c,
+            "feature_summary": self.feature_summary,
+            "dataset_id": self.dataset_id,
+            "cv_macro_f1_mean": self.cv_macro_f1_mean,
+            "cv_accuracy_mean": self.cv_accuracy_mean,
         }
+
+
+def _format_ngram_range(ngram_min: Any, ngram_max: Any) -> str:
+    if ngram_min == ngram_max:
+        return f"{ngram_min}-gram"
+    return f"{ngram_min}-{ngram_max} grams"
+
+
+def _build_feature_summary(
+    *, preprocessing: dict[str, Any], feature_matrix: dict[str, Any]
+) -> str:
+    analyzer = str(preprocessing.get("analyzer", "word"))
+    ngram_min = preprocessing.get("ngram_min", 1)
+    ngram_max = preprocessing.get("ngram_max", 1)
+    base_summary = f"TF-IDF {analyzer} {_format_ngram_range(ngram_min, ngram_max)}"
+
+    length_enabled = bool(
+        preprocessing.get("length_feature_enabled")
+        or "length" in feature_matrix.get("feature_families", [])
+    )
+    if length_enabled:
+        return f"{base_summary} + length"
+    return base_summary
 
 
 class TicketRoutingService:
@@ -75,6 +106,9 @@ class TicketRoutingService:
         config_path = Path(config_path)
         payload = json.loads(config_path.read_text(encoding="utf-8"))
         base_dir = config_path.parent
+        promoted_models = json.loads(
+            (base_dir / "promoted_models.json").read_text(encoding="utf-8")
+        )
         models: dict[str, LoadedTaskModel] = {}
 
         for task_name, spec in payload["models"].items():
@@ -82,18 +116,30 @@ class TicketRoutingService:
             run_config = json.loads(
                 (base_dir / spec["run_config_path"]).read_text(encoding="utf-8")
             )
-            feature_matrix = run_config.get("feature_matrix", {})
-            feature_families = feature_matrix.get("feature_families")
-            if not feature_families:
-                feature_families = ["tfidf"]
-                if run_config.get("preprocessing", {}).get("length_feature_enabled"):
-                    feature_families.append("length")
+            promoted_spec = promoted_models[task_name]
+            feature_matrix = promoted_spec.get(
+                "feature_matrix", run_config.get("feature_matrix", {})
+            )
+            preprocessing = promoted_spec.get(
+                "preprocessing", run_config.get("preprocessing", {})
+            )
+            model_config = promoted_spec.get("model", run_config.get("model", {}))
+            headline_metrics = promoted_spec.get("headline_metrics", {})
+            dataset = promoted_spec.get("dataset", {})
+
             models[task_name] = LoadedTaskModel(
                 task_name=task_name,
-                run_id=spec["run_id"],
-                algorithm=run_config["model"]["algorithm"],
-                model_family=run_config["model"]["model_family"],
-                feature_families=feature_families,
+                run_id=promoted_spec.get("run_id", spec["run_id"]),
+                algorithm=str(model_config["algorithm"]),
+                model_family=str(model_config["model_family"]),
+                c=float(model_config["C"]),
+                feature_summary=_build_feature_summary(
+                    preprocessing=preprocessing,
+                    feature_matrix=feature_matrix,
+                ),
+                dataset_id=str(dataset["id"]),
+                cv_macro_f1_mean=float(headline_metrics["macro_f1_mean"]),
+                cv_accuracy_mean=float(headline_metrics["accuracy_mean"]),
                 trainer=trainer,
             )
 

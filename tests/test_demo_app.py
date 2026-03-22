@@ -34,6 +34,8 @@ class DemoApiTests(unittest.TestCase):
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(set(payload["tasks"]), {"queue", "priority"})
         self.assertEqual(set(payload["models"]), {"queue", "priority"})
+        for metadata in payload["models"].values():
+            self._assert_model_metadata_shape(metadata)
 
     def test_demo_ticket_endpoint_returns_usable_payload(self) -> None:
         response = self.client.get("/demo-ticket", params={"index": 2})
@@ -56,6 +58,7 @@ class DemoApiTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(set(payload["predictions"]), {"queue", "priority"})
         self.assertEqual(set(payload["input"]), {"subject", "body", "language"})
+        self.assertEqual(set(payload["models"]), {"queue", "priority"})
         for task_name in ("queue", "priority"):
             task_payload = payload["predictions"][task_name]
             self.assertIn("runner_up_label", task_payload)
@@ -63,6 +66,7 @@ class DemoApiTests(unittest.TestCase):
             self.assertTrue(task_payload["label"])
             self.assertTrue(task_payload["runner_up_label"])
             self.assertNotEqual(task_payload["label"], task_payload["runner_up_label"])
+            self._assert_model_metadata_shape(payload["models"][task_name])
 
     def test_predict_endpoint_without_language_still_works(self) -> None:
         response = self.client.post(
@@ -99,10 +103,27 @@ class DemoApiTests(unittest.TestCase):
         self.assertEqual(set(payload["predictions"]), {"queue", "priority"})
         self.assertEqual(payload["input"]["language"], "en")
         for metadata in payload["models"].values():
-            self.assertEqual(
-                set(metadata),
-                {"run_id", "algorithm", "model_family", "feature_families"},
-            )
+            self._assert_model_metadata_shape(metadata)
+
+    def _assert_model_metadata_shape(self, metadata: dict[str, object]) -> None:
+        self.assertEqual(
+            set(metadata),
+            {
+                "run_id",
+                "algorithm",
+                "model_family",
+                "c",
+                "feature_summary",
+                "dataset_id",
+                "cv_macro_f1_mean",
+                "cv_accuracy_mean",
+            },
+        )
+        self.assertIsInstance(metadata["c"], float)
+        self.assertIsInstance(metadata["cv_macro_f1_mean"], float)
+        self.assertIsInstance(metadata["cv_accuracy_mean"], float)
+        self.assertTrue(metadata["feature_summary"])
+        self.assertTrue(metadata["dataset_id"])
 
 
 class ServingImportIsolationTests(unittest.TestCase):
