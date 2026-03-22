@@ -15,6 +15,7 @@ COPY . .
 
 EXPOSE 8000 8501
 
+RUN sed -i 's/\r$//' /app/start.sh
 RUN chmod +x /app/start.sh
 
 CMD ["/app/start.sh"]
