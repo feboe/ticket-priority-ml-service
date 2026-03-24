@@ -27,6 +27,7 @@ SERVING_ROOT = ROOT / "serving_assets"
 MODELS_ROOT = SERVING_ROOT / "models"
 CONFIGS_ROOT = SERVING_ROOT / "configs"
 DOCS_ROOT = ROOT / "docs"
+DOCS_ASSETS_ROOT = DOCS_ROOT / "assets"
 SUMMARY_PATH = SERVING_ROOT / "promoted_models.json"
 
 HEADLINE_METRICS = {
@@ -120,6 +121,7 @@ def main() -> None:
     MODELS_ROOT.mkdir(parents=True, exist_ok=True)
     CONFIGS_ROOT.mkdir(parents=True, exist_ok=True)
     DOCS_ROOT.mkdir(parents=True, exist_ok=True)
+    DOCS_ASSETS_ROOT.mkdir(parents=True, exist_ok=True)
 
     serving_config = {
         "app": {
@@ -176,7 +178,7 @@ def main() -> None:
                 ).replace("\\", "/"),
             },
             "docs_artifacts": {
-                "confusion_matrix_path": f"{task_name}-confusion-matrix.png",
+                "confusion_matrix_path": f"assets/{task_name}-confusion-matrix.png",
             },
         }
 
@@ -185,7 +187,7 @@ def main() -> None:
             task_name=task_name,
             labels=labels,
             matrix=matrix,
-            output_path=DOCS_ROOT / f"{task_name}-confusion-matrix.png",
+            output_path=DOCS_ASSETS_ROOT / f"{task_name}-confusion-matrix.png",
         )
 
     (SERVING_ROOT / "serving_config.json").write_text(

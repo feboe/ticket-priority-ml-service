@@ -5,7 +5,7 @@
       "row_count": 28587
     },
     "docs_artifacts": {
-      "confusion_matrix_path": "priority-confusion-matrix.png"
+      "confusion_matrix_path": "assets/priority-confusion-matrix.png"
     },
     "feature_matrix": {
       "columns": 792218,
@@ -56,7 +56,7 @@
       "row_count": 28587
     },
     "docs_artifacts": {
-      "confusion_matrix_path": "queue-confusion-matrix.png"
+      "confusion_matrix_path": "assets/queue-confusion-matrix.png"
     },
     "feature_matrix": {
       "columns": 792218,
