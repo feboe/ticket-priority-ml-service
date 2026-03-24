@@ -4,7 +4,7 @@ An end-to-end applied machine learning project for support-ticket triage. The sy
 
 Tech stack: Python, scikit-learn, MLflow, FastAPI, Streamlit, Docker, GitHub Actions
 
-![Ticket Triage Demo](docs/app-screenshot.png)
+![Ticket Triage Demo](docs/assets/app-screenshot.png)
 
 ## What This Project Does
 
@@ -104,7 +104,7 @@ To verify the repository locally, run:
 .\.venv\Scripts\python -m unittest discover -s tests -v
 ```
 
-Mean cross-validation confusion matrices for the promoted models are available in [queue-confusion-matrix.png](docs/queue-confusion-matrix.png) and [priority-confusion-matrix.png](docs/priority-confusion-matrix.png).
+The full experiment story, model-selection rationale, and promoted-model confusion matrices are documented in [docs/experiments.md](docs/experiments.md). The selected `LinearSVC` models came out of shared cross-validation sweeps because they gave the best balance of macro F1, accuracy, and feature-space size while keeping the serving pipeline simple and consistently TF-IDF-based.
 
 The promoted serving models, their task-specific hyperparameters, and their headline metrics are summarized in [`serving_assets/promoted_models.json`](serving_assets/promoted_models.json). The demo intentionally does not serve "latest run wins" artifacts.
 
@@ -113,7 +113,7 @@ The promoted serving models, their task-specific hyperparameters, and their head
 - English performance is substantially better than German performance.
 - The system uses TF-IDF features and linear classifiers, so semantic understanding is limited compared with transformer-based approaches.
 - Some queue classes remain systematically confusable where business meanings overlap.
-- The public repo does not include the full training CSV or the local MLflow history.
+- The public repo does not include the full training CSV
 
 ## License And Data
 
