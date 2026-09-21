@@ -1,4 +1,4 @@
-﻿"""FastAPI application for the ticket triage demo."""
+"""FastAPI application for the ticket triage demo."""
 
 from __future__ import annotations
 

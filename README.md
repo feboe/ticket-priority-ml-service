@@ -34,7 +34,7 @@ The demo uses the fixed promoted models that are already checked in under [`serv
 
 If you already have Docker installed, this is the quickest way to run the full demo.
 
-```powershell
+```bash
 git lfs install
 git clone https://github.com/feboe/ticket-priority-ml-service.git
 cd ticket-priority-ml-service
@@ -50,28 +50,29 @@ Open:
 
 ### Alternative: Run Locally Without Docker
 
-```powershell
+```bash
 git lfs install
 git clone https://github.com/feboe/ticket-priority-ml-service.git
 cd ticket-priority-ml-service
 git lfs pull
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements-app.txt
-.\.venv\Scripts\python -m nltk.downloader stopwords
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements-app.txt
+python -m nltk.downloader stopwords
 ```
 
 Start the API:
 
-```powershell
-.\.venv\Scripts\uvicorn app.api:app --host 127.0.0.1 --port 8000
+```bash
+python -m uvicorn app.api:app --host 127.0.0.1 --port 8000
 ```
 
 Start the UI in a second terminal:
 
-```powershell
-$env:API_BASE_URL='http://127.0.0.1:8000'
-.\.venv\Scripts\streamlit run app/ui.py
+```bash
+source .venv/bin/activate
+export API_BASE_URL='http://127.0.0.1:8000'
+python -m streamlit run app/ui.py
 ```
 
 Open:
@@ -89,13 +90,13 @@ For full retraining, download the public Kaggle dataset [Multilingual Customer S
 
 The Kaggle bundle contains multiple CSV files. This repository uses the file above by default, or you can train on a different file with:
 
-```powershell
-.\.venv\Scripts\python -m scripts.train --data data/<filename>.csv
+```bash
+python -m scripts.train --data data/<filename>.csv
 ```
 
-```powershell
-pip install -r requirements.txt
-.\.venv\Scripts\python -m scripts.train --algorithm linear_svc --run-group algo-benchmark-v1
+```bash
+python -m pip install -r requirements.txt
+python -m scripts.train --algorithm linear_svc --run-group algo-benchmark-v1
 ```
 
 Dataset hashes, dataset roles, and the frozen EN/DE holdout protocol are
@@ -105,8 +106,8 @@ hyperparameter selection.
 
 Evaluate the promoted models on the frozen holdout with:
 
-```powershell
-.\.venv\Scripts\python -m scripts.evaluate_holdout
+```bash
+python -m scripts.evaluate_holdout
 ```
 
 The command verifies the dataset hash, applies the EN/DE filter, and writes a
@@ -115,8 +116,8 @@ is kept local and ignored by Git.
 
 To verify the repository locally, run:
 
-```powershell
-.\.venv\Scripts\python -m unittest discover -s tests -v
+```bash
+python -m unittest discover -s tests -v
 ```
 
 The full experiment story, model-selection rationale, and promoted-model confusion matrices are documented in [docs/experiments.md](docs/experiments.md). The selected `LinearSVC` models came out of shared cross-validation sweeps because they gave the best balance of macro F1, accuracy, and feature-space size while keeping the serving pipeline simple and consistently TF-IDF-based.

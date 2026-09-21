@@ -1,4 +1,4 @@
-﻿"""MLflow tracking helpers for training runs."""
+"""MLflow tracking helpers for training runs."""
 
 from __future__ import annotations
 

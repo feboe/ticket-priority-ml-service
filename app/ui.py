@@ -1,4 +1,4 @@
-﻿"""Streamlit UI for the ticket triage MVP."""
+"""Streamlit UI for the ticket triage MVP."""
 
 from __future__ import annotations
 

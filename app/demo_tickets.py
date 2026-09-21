@@ -1,4 +1,4 @@
-﻿"""Curated synthetic demo tickets for the MVP UI."""
+"""Curated synthetic demo tickets for the MVP UI."""
 
 from __future__ import annotations
 

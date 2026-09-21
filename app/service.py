@@ -1,4 +1,4 @@
-﻿"""Inference service for the ticket triage MVP."""
+"""Inference service for the ticket triage MVP."""
 
 from __future__ import annotations
 
