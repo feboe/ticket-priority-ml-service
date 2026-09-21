@@ -53,18 +53,21 @@ class TextPreparationPipelineTests(StopWordCacheIsolationTestCase):
 
         self.assertEqual(normalized, "contact email at url about ticket number")
 
-    def test_normalize_text_falls_back_when_nltk_stopwords_are_unavailable(self) -> None:
+    def test_normalize_text_fails_when_nltk_stopwords_are_unavailable(self) -> None:
         _clear_stopword_cache()
         with patch(
             "src.preprocessing.stopwords.words", side_effect=LookupError
         ) as mocked_lookup:
-            normalized = TextPreparationPipeline._normalize_text(
-                "This is an urgent billing issue",
-                language="en",
-            )
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "python -m nltk.downloader stopwords",
+            ):
+                TextPreparationPipeline._normalize_text(
+                    "This is an urgent billing issue",
+                    language="en",
+                )
 
         self.assertEqual(mocked_lookup.call_count, 1)
-        self.assertEqual(normalized, "this is an urgent billing issue")
 
 
 class TargetPreprocessorContractTests(StopWordCacheIsolationTestCase):

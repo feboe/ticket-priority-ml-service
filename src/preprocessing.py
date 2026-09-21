@@ -28,12 +28,16 @@ STOP_WORD_LANGUAGE_BY_PREFIX = {
 
 PRIORITY_CLASS_ORDER = ("low", "medium", "high")
 
+
 @lru_cache(maxsize=4)
 def _load_nltk_stop_words(language: str) -> frozenset[str]:
     try:
         return frozenset(stopwords.words(language))
-    except LookupError:
-        return frozenset()
+    except LookupError as exc:
+        raise RuntimeError(
+            "NLTK stopwords are missing. Install them with: "
+            "python -m nltk.downloader stopwords"
+        ) from exc
 
 
 @dataclass
