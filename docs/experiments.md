@@ -53,18 +53,37 @@ The queue matrix shows the heaviest overlap among `Technical Support`, `Product 
 
 The priority matrix is cleaner overall, but the dominant errors are still between adjacent business levels. The largest confusion is `high` predicted as `medium`, with `low` also drifting into `medium`.
 
-## Language Performance
+## Cross-Validation Language Performance
 
-Language-specific evaluation on the promoted models shows a clear English-German gap:
+Language-specific cross-validation on the promoted models shows a clear English-German gap:
 
 - Queue macro F1: English `0.7841`, German `0.5341`
 - Priority macro F1: English `0.7951`, German `0.5960`
+
+## Frozen Holdout Evaluation
+
+After model selection, the promoted models were evaluated once on the frozen
+English/German view of the separate 4k dataset described in
+[`datasets.md`](datasets.md). The filter retained `2,239` tickets.
+
+| Task | Accuracy | Macro F1 | English Macro F1 | German Macro F1 |
+| --- | ---: | ---: | ---: | ---: |
+| Queue | 0.3006 | 0.2470 | 0.2819 | 0.1803 |
+| Priority | 0.4712 | 0.4314 | 0.4334 | 0.4244 |
+
+The holdout performance is substantially below the selection-CV results,
+especially for queue routing. This indicates limited transfer to a separate
+synthetic generation and makes the CV scores unsuitable as standalone
+generalization claims. The holdout runs and detailed class, language, and
+confusion metrics are tracked separately in the MLflow experiment
+`ticket-priority-holdout`.
 
 ## Takeaways
 
 - `LinearSVC` consistently outperformed `LogisticRegression` on both tasks.
 - The tuned `1-3` word-ngram setup beat the larger `1-4` feature space on both tasks and was promoted.
 - Disabling stop-word removal hurt both tasks, so the default language-aware preprocessing stayed in place.
+- The frozen holdout revealed a substantial transfer gap, most strongly for queue prediction.
 
 ## Notes
 

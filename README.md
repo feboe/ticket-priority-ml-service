@@ -16,6 +16,8 @@ Tech stack: Python, scikit-learn, MLflow, FastAPI, Streamlit, Docker, GitHub Act
 
 ## Results
 
+### Selection Cross-Validation
+
 | Task | Macro F1 (mean +/- std) | Accuracy (mean +/- std) |
 | --- | ---: | ---: |
 | Queue | 0.6854 +/- 0.0041 | 0.6892 +/- 0.0029 |
@@ -25,6 +27,19 @@ Language-specific performance is noticeably stronger on English tickets than on 
 
 - Queue macro F1: English `0.7841`, German `0.5341`
 - Priority macro F1: English `0.7951`, German `0.5960`
+
+### Frozen Holdout
+
+| Task | Macro F1 | Accuracy |
+| --- | ---: | ---: |
+| Queue | 0.2470 | 0.3006 |
+| Priority | 0.4314 | 0.4712 |
+
+The separate synthetic holdout shows a substantial transfer gap, especially
+for queue routing. These final holdout results are reported separately from the
+cross-validation results used for model selection. See
+[`docs/experiments.md`](docs/experiments.md) for language slices and detailed
+interpretation.
 
 ## Run The Demo
 
@@ -82,58 +97,46 @@ Open:
 
 ## Training And Reproducibility
 
-The public repo is demo-reproducible out of the box because serving uses fixed checked-in model artifacts.
+The demo uses fixed checked-in model artifacts. For full retraining, download
+the public Kaggle dataset [Multilingual Customer Support Tickets](https://www.kaggle.com/datasets/tobiasbueck/multilingual-customer-support-tickets)
+and place the training CSV at
+`data/aa_dataset-tickets-multi-lang-5-2-50-version.csv`.
 
-For full retraining, download the public Kaggle dataset [Multilingual Customer Support Tickets](https://www.kaggle.com/datasets/tobiasbueck/multilingual-customer-support-tickets) and place the default training file at:
-
-`data/aa_dataset-tickets-multi-lang-5-2-50-version.csv`
-
-Install the full ML dependencies before training or holdout evaluation:
+### Train
 
 ```bash
 python -m pip install -r requirements.txt
-```
-
-The Kaggle bundle contains multiple CSV files. This repository uses the file above by default, or you can train on a different file with:
-
-```bash
-python -m scripts.train --data data/<filename>.csv
-```
-
-```bash
+python -m nltk.downloader stopwords
 python -m scripts.train --algorithm linear_svc --run-group algo-benchmark-v1
 ```
 
-Dataset hashes, dataset roles, and the frozen EN/DE holdout protocol are
-documented in [docs/datasets.md](docs/datasets.md). The holdout is reserved for
-evaluating an already selected model and must not be used for model or
-hyperparameter selection.
+Pass `--data data/<filename>.csv` to train on another file from the bundle.
 
-Evaluate the promoted models on the frozen holdout with:
+### Evaluate The Frozen Holdout
 
 ```bash
 python -m scripts.evaluate_holdout
 ```
 
-The command verifies the dataset hash, applies the EN/DE filter, and creates one
-MLflow run per task in the `ticket-priority-holdout` experiment. Each run links
-to its promoted source-model run and stores the dataset hash, filter metadata,
-headline metrics, language slices, and detailed CSV artifacts. A local JSON
-summary plus CSV copies are written under `results/holdout/`; this directory is
-kept local and ignored by Git.
+This verifies the dataset hash and records one MLflow run per task in the
+`ticket-priority-holdout` experiment. Local result copies are written to the
+Git-ignored `results/holdout/` directory.
 
-To verify the repository locally, run:
+### Test
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-The full experiment story, model-selection rationale, and promoted-model confusion matrices are documented in [docs/experiments.md](docs/experiments.md). The selected `LinearSVC` models came out of shared cross-validation sweeps because they gave the best balance of macro F1, accuracy, and feature-space size while keeping the serving pipeline simple and consistently TF-IDF-based.
-
-The promoted serving models, their task-specific hyperparameters, and their headline metrics are summarized in [`serving_assets/promoted_models.json`](serving_assets/promoted_models.json). The demo intentionally does not serve "latest run wins" artifacts.
+Dataset identity and the holdout protocol are documented in
+[docs/datasets.md](docs/datasets.md). Model selection and detailed results are
+documented in [docs/experiments.md](docs/experiments.md), while the promoted
+serving metadata is stored in
+[`serving_assets/promoted_models.json`](serving_assets/promoted_models.json).
 
 ## Limitations
 
+- Performance drops substantially on the separate synthetic holdout, especially for queue routing, indicating limited transfer beyond the model-selection dataset.
 - English performance is substantially better than German performance.
 - The system uses TF-IDF features and linear classifiers, so semantic understanding is limited compared with transformer-based approaches.
 - Some queue classes remain systematically confusable where business meanings overlap.
