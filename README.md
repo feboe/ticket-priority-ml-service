@@ -98,6 +98,11 @@ pip install -r requirements.txt
 .\.venv\Scripts\python train.py --algorithm linear_svc --run-group algo-benchmark-v1
 ```
 
+Dataset hashes, dataset roles, and the frozen EN/DE holdout protocol are
+documented in [docs/datasets.md](docs/datasets.md). The holdout is reserved for
+evaluating an already selected model and must not be used for model or
+hyperparameter selection.
+
 To verify the repository locally, run:
 
 ```powershell
