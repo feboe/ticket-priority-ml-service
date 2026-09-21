@@ -252,7 +252,6 @@ def log_holdout_evaluation_runs(
             "language_metrics": "language_metrics.csv",
             "per_class_metrics": "per_class_metrics.csv",
             "confusion_matrix": "confusion_matrix.csv",
-            "per_class_confusion": "per_class_confusion.csv",
             "run_config": "holdout_run_config.json",
         }
         run_config = {
@@ -281,10 +280,6 @@ def log_holdout_evaluation_runs(
             )
             log_dataframe_artifact(
                 result.confusion_matrix, artifact_names["confusion_matrix"]
-            )
-            log_dataframe_artifact(
-                result.per_class_confusion,
-                artifact_names["per_class_confusion"],
             )
             log_json_artifact(run_config, artifact_names["run_config"])
             run_ids[task_name] = run.info.run_id

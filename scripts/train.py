@@ -170,9 +170,6 @@ def main() -> None:
                 task_results["per_class_metrics"], "per_class_metrics.csv"
             )
             log_dataframe_artifact(
-                task_results["per_class_confusion"], "per_class_confusion.csv"
-            )
-            log_dataframe_artifact(
                 task_results["confusion_matrix_mean"], "confusion_matrix_mean.csv"
             )
             log_dataframe_artifact(

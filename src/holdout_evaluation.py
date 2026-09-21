@@ -92,7 +92,6 @@ def write_holdout_artifacts(
             "language_metrics": f"{task_name}_language_metrics.csv",
             "per_class_metrics": f"{task_name}_per_class_metrics.csv",
             "confusion_matrix": f"{task_name}_confusion_matrix.csv",
-            "per_class_confusion": f"{task_name}_per_class_confusion.csv",
         }
         result.language_metrics.to_csv(
             output_dir / artifact_names["language_metrics"], index=False
@@ -102,9 +101,6 @@ def write_holdout_artifacts(
         )
         result.confusion_matrix.to_csv(
             output_dir / artifact_names["confusion_matrix"], index=False
-        )
-        result.per_class_confusion.to_csv(
-            output_dir / artifact_names["per_class_confusion"], index=False
         )
         task_summaries[task_name] = {
             "accuracy": float(result.fold_metrics["accuracy"]),

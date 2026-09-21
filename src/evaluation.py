@@ -22,7 +22,6 @@ class FoldEvaluation:
     language_metrics: pd.DataFrame
     per_class_metrics: pd.DataFrame
     confusion_matrix: pd.DataFrame
-    per_class_confusion: pd.DataFrame
 
 
 def evaluate_fitted_trainer(
@@ -101,8 +100,6 @@ def evaluate_fold(
 
     matrix = confusion_matrix(truth, predictions, labels=labels)
     confusion_rows: list[dict[str, int | str]] = []
-    per_class_confusion_rows: list[dict[str, int | str]] = []
-    total = int(matrix.sum())
 
     for actual_position, actual_label_id in enumerate(labels):
         for predicted_position, predicted_label_id in enumerate(labels):
@@ -117,29 +114,11 @@ def evaluate_fold(
                 }
             )
 
-    for label_position, label_id in enumerate(labels):
-        tp = int(matrix[label_position, label_position])
-        fn = int(matrix[label_position, :].sum() - tp)
-        fp = int(matrix[:, label_position].sum() - tp)
-        tn = int(total - tp - fn - fp)
-        per_class_confusion_rows.append(
-            {
-                "fold": fold_index,
-                "label_id": label_id,
-                "label": names[label_position],
-                "tp": tp,
-                "fp": fp,
-                "fn": fn,
-                "tn": tn,
-            }
-        )
-
     return FoldEvaluation(
         fold_metrics=fold_metrics,
         language_metrics=language_metrics,
         per_class_metrics=per_class_metrics,
         confusion_matrix=pd.DataFrame(confusion_rows),
-        per_class_confusion=pd.DataFrame(per_class_confusion_rows),
     )
 
 
@@ -165,10 +144,6 @@ def summarize_cv_results(fold_evaluations: Sequence[FoldEvaluation]) -> dict[str
         [evaluation.confusion_matrix for evaluation in fold_evaluations],
         ignore_index=True,
     )
-    per_class_confusion = pd.concat(
-        [evaluation.per_class_confusion for evaluation in fold_evaluations],
-        ignore_index=True,
-    )
 
     overall_metrics = {
         "cv_accuracy_mean": float(fold_metrics["accuracy"].mean()),
@@ -189,23 +164,6 @@ def summarize_cv_results(fold_evaluations: Sequence[FoldEvaluation]) -> dict[str
             f1_std=("f1", lambda values: float(values.std(ddof=0))),
             support_mean=("support", "mean"),
             support_std=("support", lambda values: float(values.std(ddof=0))),
-        )
-        .reset_index()
-        .sort_values("label_id")
-        .reset_index(drop=True)
-    )
-
-    per_class_confusion_summary = (
-        per_class_confusion.groupby(["label_id", "label"], sort=False)
-        .agg(
-            tp_mean=("tp", "mean"),
-            tp_std=("tp", lambda values: float(values.std(ddof=0))),
-            fp_mean=("fp", "mean"),
-            fp_std=("fp", lambda values: float(values.std(ddof=0))),
-            fn_mean=("fn", "mean"),
-            fn_std=("fn", lambda values: float(values.std(ddof=0))),
-            tn_mean=("tn", "mean"),
-            tn_std=("tn", lambda values: float(values.std(ddof=0))),
         )
         .reset_index()
         .sort_values("label_id")
@@ -235,7 +193,6 @@ def summarize_cv_results(fold_evaluations: Sequence[FoldEvaluation]) -> dict[str
         **overall_metrics,
         **_flatten_language_metrics(language_summary),
         **_flatten_per_class_metrics(per_class_summary),
-        **_flatten_per_class_confusion_metrics(per_class_confusion_summary),
     }
 
     return {
@@ -243,7 +200,6 @@ def summarize_cv_results(fold_evaluations: Sequence[FoldEvaluation]) -> dict[str
         "mlflow_metrics": mlflow_metrics,
         "language_metrics": language_summary,
         "per_class_metrics": per_class_summary,
-        "per_class_confusion": per_class_confusion_summary,
         "confusion_matrix_mean": confusion_matrix_mean,
         "confusion_matrix_std": confusion_matrix_std,
     }
@@ -278,23 +234,6 @@ def _flatten_language_metrics(language_summary: pd.DataFrame) -> dict[str, float
         metrics[f"cv_sample_count_std__lang_{language_slug}"] = float(
             row.sample_count_std
         )
-    return metrics
-
-
-def _flatten_per_class_confusion_metrics(
-    per_class_confusion_summary: pd.DataFrame,
-) -> dict[str, float]:
-    metrics: dict[str, float] = {}
-    for row in per_class_confusion_summary.itertuples(index=False):
-        label_slug = _slugify(row.label)
-        metrics[f"cv_tp_mean__{label_slug}"] = float(row.tp_mean)
-        metrics[f"cv_tp_std__{label_slug}"] = float(row.tp_std)
-        metrics[f"cv_fp_mean__{label_slug}"] = float(row.fp_mean)
-        metrics[f"cv_fp_std__{label_slug}"] = float(row.fp_std)
-        metrics[f"cv_fn_mean__{label_slug}"] = float(row.fn_mean)
-        metrics[f"cv_fn_std__{label_slug}"] = float(row.fn_std)
-        metrics[f"cv_tn_mean__{label_slug}"] = float(row.tn_mean)
-        metrics[f"cv_tn_std__{label_slug}"] = float(row.tn_std)
     return metrics
 
 

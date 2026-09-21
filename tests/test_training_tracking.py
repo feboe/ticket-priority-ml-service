@@ -75,12 +75,6 @@ class TrainingTrackingSmokeTests(unittest.TestCase):
                             for column in runs.columns
                         )
                     )
-                    self.assertTrue(
-                        any(
-                            column.startswith("metrics.cv_tp_mean__")
-                            for column in runs.columns
-                        )
-                    )
                     self.assertIn("metrics.cv_accuracy_mean__lang_en", runs.columns)
                     self.assertIn("metrics.cv_accuracy_mean__lang_de", runs.columns)
                     self.assertIn("metrics.cv_macro_f1_mean__lang_en", runs.columns)
@@ -93,9 +87,6 @@ class TrainingTrackingSmokeTests(unittest.TestCase):
 
                         self.assertTrue(
                             (artifact_root / "per_class_metrics.csv").exists()
-                        )
-                        self.assertTrue(
-                            (artifact_root / "per_class_confusion.csv").exists()
                         )
                         self.assertTrue(
                             (artifact_root / "confusion_matrix_mean.csv").exists()

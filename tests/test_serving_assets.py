@@ -41,20 +41,14 @@ class PromotedModelSummaryTests(unittest.TestCase):
             "model",
             "preprocessing",
             "run_id",
-            "serving_artifacts",
             "training",
         }
         for task_name, spec in serving_config["models"].items():
             task_summary = summary[task_name]
             self.assertEqual(set(task_summary), expected_task_keys)
-            self.assertEqual(task_summary["run_id"], spec["run_id"])
-            self.assertEqual(
-                task_summary["serving_artifacts"]["model_path"],
-                spec["model_path"],
-            )
-            self.assertEqual(
-                task_summary["serving_artifacts"]["run_config_path"],
-                spec["run_config_path"],
+            self.assertEqual(set(spec), {"model_path"})
+            self.assertTrue(
+                (serving_config_path.parent / spec["model_path"]).exists()
             )
             confusion_matrix_path = (
                 Path("docs") / task_summary["docs_artifacts"]["confusion_matrix_path"]

@@ -36,10 +36,6 @@
       "sublinear_tf": false
     },
     "run_id": "5b3febadbb894da28b181a253e99ef56",
-    "serving_artifacts": {
-      "model_path": "models/priority_model.joblib",
-      "run_config_path": "configs/priority_run_config.json"
-    },
     "training": {
       "cv_folds": 5,
       "random_state": 42,
@@ -86,10 +82,6 @@
       "sublinear_tf": false
     },
     "run_id": "7db335f24d524827aa3f27bba2aa8d8d",
-    "serving_artifacts": {
-      "model_path": "models/queue_model.joblib",
-      "run_config_path": "configs/queue_run_config.json"
-    },
     "training": {
       "cv_folds": 5,
       "random_state": 42,

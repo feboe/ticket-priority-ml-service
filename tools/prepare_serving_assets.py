@@ -25,7 +25,6 @@ ROOT = Path(__file__).resolve().parents[1]
 MLRUNS_ROOT = ROOT / "mlruns" / EXPERIMENT_ID
 SERVING_ROOT = ROOT / "serving_assets"
 MODELS_ROOT = SERVING_ROOT / "models"
-CONFIGS_ROOT = SERVING_ROOT / "configs"
 DOCS_ROOT = ROOT / "docs"
 DOCS_ASSETS_ROOT = DOCS_ROOT / "assets"
 SUMMARY_PATH = SERVING_ROOT / "promoted_models.json"
@@ -116,7 +115,6 @@ def _draw_confusion_matrix_image(
 
 def main() -> None:
     MODELS_ROOT.mkdir(parents=True, exist_ok=True)
-    CONFIGS_ROOT.mkdir(parents=True, exist_ok=True)
     DOCS_ROOT.mkdir(parents=True, exist_ok=True)
     DOCS_ASSETS_ROOT.mkdir(parents=True, exist_ok=True)
 
@@ -141,22 +139,12 @@ def main() -> None:
         normalized_run_config = _normalize_run_config(run_config, trainer)
 
         model_destination = MODELS_ROOT / f"{task_name}_model.joblib"
-        run_config_destination = CONFIGS_ROOT / f"{task_name}_run_config.json"
-
         shutil.copy2(model_source, model_destination)
-        run_config_destination.write_text(
-            json.dumps(normalized_run_config, indent=2, sort_keys=True),
-            encoding="utf-8",
-        )
 
         serving_config["models"][task_name] = {
-            "run_id": run_id,
             "model_path": str(model_destination.relative_to(SERVING_ROOT)).replace(
                 "\\", "/"
             ),
-            "run_config_path": str(
-                run_config_destination.relative_to(SERVING_ROOT)
-            ).replace("\\", "/"),
         }
         promoted_summary[task_name] = {
             "run_id": run_id,
@@ -166,14 +154,6 @@ def main() -> None:
             "model": normalized_run_config["model"],
             "preprocessing": normalized_run_config["preprocessing"],
             "feature_matrix": normalized_run_config["feature_matrix"],
-            "serving_artifacts": {
-                "model_path": str(model_destination.relative_to(SERVING_ROOT)).replace(
-                    "\\", "/"
-                ),
-                "run_config_path": str(
-                    run_config_destination.relative_to(SERVING_ROOT)
-                ).replace("\\", "/"),
-            },
             "docs_artifacts": {
                 "confusion_matrix_path": f"assets/{task_name}-confusion-matrix.png",
             },

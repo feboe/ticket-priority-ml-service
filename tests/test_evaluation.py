@@ -55,7 +55,6 @@ class EvaluationModuleTests(unittest.TestCase):
 
         self.assertEqual(result.per_class_metrics["label"].tolist(), self.label_names)
         self.assertNotIn("label_slug", result.per_class_metrics.columns)
-        self.assertNotIn("label_slug", result.per_class_confusion.columns)
 
         high_row = result.per_class_metrics[
             result.per_class_metrics["label"] == "high"
@@ -63,14 +62,6 @@ class EvaluationModuleTests(unittest.TestCase):
         self.assertEqual(int(high_row["support"]), 0)
         self.assertEqual(float(high_row["precision"]), 0.0)
         self.assertEqual(float(high_row["recall"]), 0.0)
-
-        high_confusion = result.per_class_confusion[
-            result.per_class_confusion["label"] == "high"
-        ].iloc[0]
-        self.assertEqual(int(high_confusion["tp"]), 0)
-        self.assertEqual(int(high_confusion["fp"]), 0)
-        self.assertEqual(int(high_confusion["fn"]), 0)
-        self.assertEqual(int(high_confusion["tn"]), 4)
 
     def test_evaluate_fold_builds_language_metrics_when_languages_are_provided(
         self,
@@ -124,7 +115,6 @@ class EvaluationModuleTests(unittest.TestCase):
             summary["overall_metrics"]["cv_macro_f1_std"], 0.005555555555555536
         )
         self.assertNotIn("label_slug", summary["per_class_metrics"].columns)
-        self.assertNotIn("label_slug", summary["per_class_confusion"].columns)
 
         high_row = summary["per_class_metrics"][
             summary["per_class_metrics"]["label"] == "high"
@@ -132,7 +122,6 @@ class EvaluationModuleTests(unittest.TestCase):
         self.assertAlmostEqual(float(high_row["support_mean"]), 1.0)
         self.assertAlmostEqual(float(high_row["support_std"]), 1.0)
         self.assertIn("cv_precision_mean__high", summary["mlflow_metrics"])
-        self.assertIn("cv_tp_mean__high", summary["mlflow_metrics"])
 
     def test_summarize_cv_results_builds_confusion_matrix_mean_std(self) -> None:
         fold_evaluations = _two_fold_evaluations(
@@ -143,17 +132,10 @@ class EvaluationModuleTests(unittest.TestCase):
         summary = summarize_cv_results(fold_evaluations)
         confusion_mean = summary["confusion_matrix_mean"].set_index("actual_label")
         confusion_std = summary["confusion_matrix_std"].set_index("actual_label")
-        per_class_confusion = summary["per_class_confusion"]
 
         self.assertAlmostEqual(float(confusion_mean.loc["low", "low"]), 1.0)
         self.assertAlmostEqual(float(confusion_mean.loc["low", "medium"]), 0.5)
         self.assertAlmostEqual(float(confusion_std.loc["low", "medium"]), 0.5)
-
-        high_row = per_class_confusion[per_class_confusion["label"] == "high"].iloc[0]
-        self.assertAlmostEqual(float(high_row["tp_mean"]), 0.5)
-        self.assertAlmostEqual(float(high_row["tp_std"]), 0.5)
-        self.assertAlmostEqual(float(high_row["tn_mean"]), 2.5)
-        self.assertAlmostEqual(float(high_row["tn_std"]), 1.5)
 
     def test_summarize_cv_results_aggregates_language_metrics_and_flattens_mlflow_keys(
         self,

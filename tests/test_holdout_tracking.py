@@ -79,7 +79,6 @@ class HoldoutTrackingTests(unittest.TestCase):
                     "language_metrics.csv",
                     "per_class_metrics.csv",
                     "confusion_matrix.csv",
-                    "per_class_confusion.csv",
                     "holdout_run_config.json",
                 ):
                     self.assertTrue((artifact_root / artifact_name).exists())

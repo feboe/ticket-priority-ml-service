@@ -102,19 +102,14 @@ class TicketRoutingService:
 
         for task_name, spec in payload["models"].items():
             trainer = joblib.load(base_dir / spec["model_path"])
-            run_config = json.loads(
-                (base_dir / spec["run_config_path"]).read_text(encoding="utf-8")
-            )
             promoted_spec = promoted_models[task_name]
-            preprocessing = promoted_spec.get(
-                "preprocessing", run_config.get("preprocessing", {})
-            )
-            model_config = promoted_spec.get("model", run_config.get("model", {}))
-            headline_metrics = promoted_spec.get("headline_metrics", {})
-            dataset = promoted_spec.get("dataset", {})
+            preprocessing = promoted_spec["preprocessing"]
+            model_config = promoted_spec["model"]
+            headline_metrics = promoted_spec["headline_metrics"]
+            dataset = promoted_spec["dataset"]
 
             models[task_name] = LoadedTaskModel(
-                run_id=promoted_spec.get("run_id", spec["run_id"]),
+                run_id=promoted_spec["run_id"],
                 algorithm=str(model_config["algorithm"]),
                 model_family=str(model_config["model_family"]),
                 c=float(model_config["C"]),
