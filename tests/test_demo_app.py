@@ -24,7 +24,9 @@ if FASTAPI_AVAILABLE and HTTPX_AVAILABLE and SERVING_CONFIG_EXISTS:
 class DemoApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.service = TicketRoutingService.from_config(Path("serving_assets/serving_config.json"))
+        cls.service = TicketRoutingService.from_config(
+            Path("serving_assets/serving_config.json")
+        )
         cls.client = TestClient(create_app(cls.service))
 
     def test_health_endpoint_reports_loaded_models(self) -> None:
@@ -45,7 +47,9 @@ class DemoApiTests(unittest.TestCase):
         self.assertEqual(set(payload["ticket"]), {"subject", "body", "language"})
         self.assertGreater(payload["total"], 0)
 
-    def test_predict_endpoint_returns_queue_and_priority_with_runner_up_and_gap(self) -> None:
+    def test_predict_endpoint_returns_queue_and_priority_with_runner_up_and_gap(
+        self,
+    ) -> None:
         response = self.client.post(
             "/predict",
             json={
@@ -132,7 +136,9 @@ class ServingImportIsolationTests(unittest.TestCase):
         try:
             from app.service import TicketRoutingService
 
-            service = TicketRoutingService.from_config(Path("serving_assets/serving_config.json"))
+            service = TicketRoutingService.from_config(
+                Path("serving_assets/serving_config.json")
+            )
             self.assertEqual(set(service.models), {"queue", "priority"})
         finally:
             if original_mlflow is not None:

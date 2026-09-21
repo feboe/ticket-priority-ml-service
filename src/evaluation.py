@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Any, Sequence
 
 import pandas as pd
 from sklearn.metrics import (
@@ -23,6 +23,32 @@ class FoldEvaluation:
     per_class_metrics: pd.DataFrame
     confusion_matrix: pd.DataFrame
     per_class_confusion: pd.DataFrame
+
+
+def evaluate_fitted_trainer(
+    *,
+    trainer: Any,
+    frame: pd.DataFrame,
+    fold_index: int = 1,
+) -> FoldEvaluation:
+    """Evaluate an already fitted trainer without changing its fitted state."""
+    target_column = trainer.get_target_column()
+    X = trainer.preprocessor.transform(frame)
+    y_true = trainer.preprocessor.pipeline.target_encoder.transform(
+        frame[target_column].reset_index(drop=True)
+    )
+    y_pred = pd.Series(
+        trainer.model.predict(X),
+        name=f"{trainer.task_name}_prediction",
+    )
+    return evaluate_fold(
+        fold_index=fold_index,
+        y_true=y_true,
+        y_pred=y_pred,
+        label_ids=trainer.get_label_order(),
+        label_names=trainer.get_label_names(),
+        languages=frame.get("language"),
+    )
 
 
 def evaluate_fold(
@@ -246,8 +272,12 @@ def _flatten_language_metrics(language_summary: pd.DataFrame) -> dict[str, float
         metrics[f"cv_accuracy_std__lang_{language_slug}"] = float(row.accuracy_std)
         metrics[f"cv_macro_f1_mean__lang_{language_slug}"] = float(row.macro_f1_mean)
         metrics[f"cv_macro_f1_std__lang_{language_slug}"] = float(row.macro_f1_std)
-        metrics[f"cv_sample_count_mean__lang_{language_slug}"] = float(row.sample_count_mean)
-        metrics[f"cv_sample_count_std__lang_{language_slug}"] = float(row.sample_count_std)
+        metrics[f"cv_sample_count_mean__lang_{language_slug}"] = float(
+            row.sample_count_mean
+        )
+        metrics[f"cv_sample_count_std__lang_{language_slug}"] = float(
+            row.sample_count_std
+        )
     return metrics
 
 

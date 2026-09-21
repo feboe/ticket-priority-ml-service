@@ -9,10 +9,13 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import LinearSVC
 
-from .evaluation import FoldEvaluation, evaluate_fold, summarize_cv_results
+from .evaluation import (
+    FoldEvaluation,
+    evaluate_fitted_trainer,
+    summarize_cv_results,
+)
 from .preprocessing import PriorityPreprocessor, QueuePreprocessor
 from .training_utils import HoldoutSplit
-
 
 PREPROCESSOR_FACTORY = {
     "queue": QueuePreprocessor,
@@ -169,22 +172,10 @@ def _evaluate_split(
     )
     trainer.fit_train(split.train_df)
 
-    target_column = trainer.get_target_column()
-    X_test = trainer.preprocessor.transform(split.test_df)
-    y_true = trainer.preprocessor.pipeline.target_encoder.transform(
-        split.test_df[target_column].reset_index(drop=True)
-    )
-    y_pred = pd.Series(
-        trainer.model.predict(X_test),
-        name=f"{task_name}_prediction",
-    )
-    fold_evaluation = evaluate_fold(
+    fold_evaluation = evaluate_fitted_trainer(
+        trainer=trainer,
+        frame=split.test_df,
         fold_index=fold_index,
-        y_true=y_true,
-        y_pred=y_pred,
-        label_ids=trainer.get_label_order(),
-        label_names=trainer.get_label_names(),
-        languages=split.test_df.get("language"),
     )
     return fold_evaluation, trainer
 

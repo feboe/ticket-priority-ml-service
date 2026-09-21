@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import unittest
 
-from src.evaluation import evaluate_fold, summarize_cv_results
+import pandas as pd
+
+from src.evaluation import (
+    evaluate_fitted_trainer,
+    evaluate_fold,
+    summarize_cv_results,
+)
 
 
 class EvaluationModuleTests(unittest.TestCase):
@@ -23,7 +29,9 @@ class EvaluationModuleTests(unittest.TestCase):
         self.assertNotIn("label_slug", result.per_class_metrics.columns)
         self.assertNotIn("label_slug", result.per_class_confusion.columns)
 
-        high_row = result.per_class_metrics[result.per_class_metrics["label"] == "high"].iloc[0]
+        high_row = result.per_class_metrics[
+            result.per_class_metrics["label"] == "high"
+        ].iloc[0]
         self.assertEqual(int(high_row["support"]), 0)
         self.assertEqual(float(high_row["precision"]), 0.0)
         self.assertEqual(float(high_row["recall"]), 0.0)
@@ -36,7 +44,9 @@ class EvaluationModuleTests(unittest.TestCase):
         self.assertEqual(int(high_confusion["fn"]), 0)
         self.assertEqual(int(high_confusion["tn"]), 4)
 
-    def test_evaluate_fold_builds_language_metrics_when_languages_are_provided(self) -> None:
+    def test_evaluate_fold_builds_language_metrics_when_languages_are_provided(
+        self,
+    ) -> None:
         result = evaluate_fold(
             fold_index=1,
             y_true=[0, 0, 1, 1],
@@ -51,7 +61,25 @@ class EvaluationModuleTests(unittest.TestCase):
         self.assertAlmostEqual(float(result.language_metrics.iloc[0]["accuracy"]), 0.5)
         self.assertAlmostEqual(float(result.language_metrics.iloc[1]["accuracy"]), 1.0)
 
-    def test_summarize_cv_results_computes_overall_mean_std_and_per_class_metrics(self) -> None:
+    def test_evaluate_fitted_trainer_reuses_fold_metric_path(self) -> None:
+        trainer = _FakeTrainer()
+        frame = pd.DataFrame(
+            {
+                "priority": ["low", "medium", "high"],
+                "language": ["en", "de", "en"],
+                "prediction_id": [0, 2, 2],
+            }
+        )
+
+        result = evaluate_fitted_trainer(trainer=trainer, frame=frame)
+
+        self.assertAlmostEqual(result.fold_metrics["accuracy"], 2 / 3)
+        self.assertEqual(result.per_class_metrics["label"].tolist(), self.label_names)
+        self.assertEqual(result.language_metrics["language"].tolist(), ["en", "de"])
+
+    def test_summarize_cv_results_computes_overall_mean_std_and_per_class_metrics(
+        self,
+    ) -> None:
         fold_one = evaluate_fold(
             fold_index=1,
             y_true=[0, 0, 1, 1],
@@ -71,12 +99,18 @@ class EvaluationModuleTests(unittest.TestCase):
 
         self.assertAlmostEqual(summary["overall_metrics"]["cv_accuracy_mean"], 0.625)
         self.assertAlmostEqual(summary["overall_metrics"]["cv_accuracy_std"], 0.125)
-        self.assertAlmostEqual(summary["overall_metrics"]["cv_macro_f1_mean"], 0.49444444444444446)
-        self.assertAlmostEqual(summary["overall_metrics"]["cv_macro_f1_std"], 0.005555555555555536)
+        self.assertAlmostEqual(
+            summary["overall_metrics"]["cv_macro_f1_mean"], 0.49444444444444446
+        )
+        self.assertAlmostEqual(
+            summary["overall_metrics"]["cv_macro_f1_std"], 0.005555555555555536
+        )
         self.assertNotIn("label_slug", summary["per_class_metrics"].columns)
         self.assertNotIn("label_slug", summary["per_class_confusion"].columns)
 
-        high_row = summary["per_class_metrics"][summary["per_class_metrics"]["label"] == "high"].iloc[0]
+        high_row = summary["per_class_metrics"][
+            summary["per_class_metrics"]["label"] == "high"
+        ].iloc[0]
         self.assertAlmostEqual(float(high_row["support_mean"]), 1.0)
         self.assertAlmostEqual(float(high_row["support_std"]), 1.0)
         self.assertIn("cv_precision_mean__high", summary["mlflow_metrics"])
@@ -113,7 +147,9 @@ class EvaluationModuleTests(unittest.TestCase):
         self.assertAlmostEqual(float(high_row["tn_mean"]), 2.5)
         self.assertAlmostEqual(float(high_row["tn_std"]), 1.5)
 
-    def test_summarize_cv_results_aggregates_language_metrics_and_flattens_mlflow_keys(self) -> None:
+    def test_summarize_cv_results_aggregates_language_metrics_and_flattens_mlflow_keys(
+        self,
+    ) -> None:
         fold_one = evaluate_fold(
             fold_index=1,
             y_true=[0, 0, 1, 1],
@@ -139,9 +175,51 @@ class EvaluationModuleTests(unittest.TestCase):
         self.assertAlmostEqual(float(language_metrics.loc["en", "accuracy_std"]), 0.25)
         self.assertAlmostEqual(float(language_metrics.loc["de", "accuracy_mean"]), 0.5)
         self.assertAlmostEqual(float(language_metrics.loc["de", "accuracy_std"]), 0.5)
-        self.assertAlmostEqual(float(language_metrics.loc["en", "sample_count_mean"]), 2.0)
+        self.assertAlmostEqual(
+            float(language_metrics.loc["en", "sample_count_mean"]), 2.0
+        )
         self.assertIn("cv_accuracy_mean__lang_en", summary["mlflow_metrics"])
         self.assertIn("cv_macro_f1_mean__lang_de", summary["mlflow_metrics"])
+
+
+class _FakeTargetEncoder:
+    def transform(self, target: pd.Series) -> pd.Series:
+        mapping = {"low": 0, "medium": 1, "high": 2}
+        return target.map(mapping)
+
+
+class _FakePipeline:
+    target_encoder = _FakeTargetEncoder()
+
+
+class _FakePreprocessor:
+    pipeline = _FakePipeline()
+
+    def transform(self, frame: pd.DataFrame):
+        return frame[["prediction_id"]].to_numpy()
+
+
+class _FakeModel:
+    def predict(self, features):
+        return features[:, 0]
+
+
+class _FakeTrainer:
+    task_name = "priority"
+    preprocessor = _FakePreprocessor()
+    model = _FakeModel()
+
+    @staticmethod
+    def get_target_column() -> str:
+        return "priority"
+
+    @staticmethod
+    def get_label_order() -> list[int]:
+        return [0, 1, 2]
+
+    @staticmethod
+    def get_label_names() -> list[str]:
+        return ["low", "medium", "high"]
 
 
 if __name__ == "__main__":

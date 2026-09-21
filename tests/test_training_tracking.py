@@ -10,7 +10,6 @@ from urllib.request import url2pathname
 
 from tests.helpers import build_smoke_dataset, run_training_smoke
 
-
 MLFLOW_AVAILABLE = importlib.util.find_spec("mlflow") is not None
 JOBLIB_AVAILABLE = importlib.util.find_spec("joblib") is not None
 
@@ -23,7 +22,9 @@ if JOBLIB_AVAILABLE:
 
 @unittest.skipUnless(MLFLOW_AVAILABLE, "mlflow is not installed")
 class TrainingTrackingSmokeTests(unittest.TestCase):
-    def test_training_creates_two_top_level_task_runs_with_minimal_artifacts(self) -> None:
+    def test_training_creates_two_top_level_task_runs_with_minimal_artifacts(
+        self,
+    ) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         for algorithm, expected_model_family in [
             ("logreg", "LogisticRegression"),
@@ -59,9 +60,7 @@ class TrainingTrackingSmokeTests(unittest.TestCase):
                     self.assertEqual(
                         set(runs["params.dataset_id"].tolist()), {"smoke_dataset"}
                     )
-                    self.assertEqual(
-                        set(runs["params.algorithm"].tolist()), {algorithm}
-                    )
+                    self.assertEqual(set(runs["params.algorithm"].tolist()), {algorithm})
                     self.assertEqual(set(runs["params.analyzer"].tolist()), {"word"})
                     self.assertEqual(
                         set(runs["params.model_family"].tolist()),
@@ -95,7 +94,9 @@ class TrainingTrackingSmokeTests(unittest.TestCase):
                         artifact_root = _artifact_root_from_uri(run.info.artifact_uri)
                         model_path = artifact_root / "trained_model.joblib"
 
-                        self.assertTrue((artifact_root / "per_class_metrics.csv").exists())
+                        self.assertTrue(
+                            (artifact_root / "per_class_metrics.csv").exists()
+                        )
                         self.assertTrue(
                             (artifact_root / "per_class_confusion.csv").exists()
                         )
@@ -148,9 +149,9 @@ class TrainingTrackingSmokeTests(unittest.TestCase):
                         self.assertEqual(
                             run_config["feature_matrix"]["feature_families"], ["tfidf"]
                         )
-                        language_metrics_csv = (artifact_root / "language_metrics.csv").read_text(
-                            encoding="utf-8"
-                        )
+                        language_metrics_csv = (
+                            artifact_root / "language_metrics.csv"
+                        ).read_text(encoding="utf-8")
                         self.assertIn("en", language_metrics_csv)
                         self.assertIn("de", language_metrics_csv)
                         self.assertNotIn("shared_metadata", run_config)
@@ -166,7 +167,6 @@ class TrainingTrackingSmokeTests(unittest.TestCase):
                             )
 
 
-
 def _artifact_root_from_uri(artifact_uri: str) -> Path:
     parsed = urlparse(artifact_uri)
     if parsed.scheme == "file":
@@ -176,4 +176,3 @@ def _artifact_root_from_uri(artifact_uri: str) -> Path:
 
 if __name__ == "__main__":
     unittest.main()
-

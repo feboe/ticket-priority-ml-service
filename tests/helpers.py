@@ -5,7 +5,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 QUEUE_LABELS = [
     "Technical Support",
     "Product Support",
@@ -19,7 +18,6 @@ QUEUE_LABELS = [
     "General Inquiry",
 ]
 PRIORITY_LABELS = ["low", "medium", "high"]
-
 
 
 def build_smoke_dataset(csv_path: Path, repeats: int = 3) -> None:
@@ -43,7 +41,6 @@ def build_smoke_dataset(csv_path: Path, repeats: int = 3) -> None:
                         "version": "smoke",
                     }
                 )
-
 
 
 def run_training_smoke(

@@ -103,6 +103,16 @@ documented in [docs/datasets.md](docs/datasets.md). The holdout is reserved for
 evaluating an already selected model and must not be used for model or
 hyperparameter selection.
 
+Evaluate the promoted models on the frozen holdout with:
+
+```powershell
+.\.venv\Scripts\python evaluate_holdout.py
+```
+
+The command verifies the dataset hash, applies the EN/DE filter, and writes a
+JSON summary plus detailed CSV metrics under `results/holdout/`. This directory
+is kept local and ignored by Git.
+
 To verify the repository locally, run:
 
 ```powershell
