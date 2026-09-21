@@ -4,6 +4,8 @@ import csv
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import unquote, urlparse
+from urllib.request import url2pathname
 
 QUEUE_LABELS = [
     "Technical Support",
@@ -73,3 +75,11 @@ def run_training_smoke(
         capture_output=True,
         text=True,
     )
+
+
+def artifact_root_from_uri(artifact_uri: str) -> Path:
+    """Resolve the local artifact root used by file-backed MLflow tests."""
+    parsed = urlparse(artifact_uri)
+    if parsed.scheme == "file":
+        return Path(url2pathname(unquote(parsed.path)))
+    return Path(artifact_uri)

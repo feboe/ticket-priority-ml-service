@@ -1,27 +1,20 @@
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 import tempfile
 import unittest
 from pathlib import Path
-from urllib.parse import unquote, urlparse
-from urllib.request import url2pathname
 
-from tests.helpers import build_smoke_dataset, run_training_smoke
+import joblib
+import mlflow
 
-MLFLOW_AVAILABLE = importlib.util.find_spec("mlflow") is not None
-JOBLIB_AVAILABLE = importlib.util.find_spec("joblib") is not None
+from tests.helpers import (
+    artifact_root_from_uri,
+    build_smoke_dataset,
+    run_training_smoke,
+)
 
-if MLFLOW_AVAILABLE:
-    import mlflow
-
-if JOBLIB_AVAILABLE:
-    import joblib
-
-
-@unittest.skipUnless(MLFLOW_AVAILABLE, "mlflow is not installed")
 class TrainingTrackingSmokeTests(unittest.TestCase):
     def test_training_creates_two_top_level_task_runs_with_minimal_artifacts(
         self,
@@ -99,7 +92,7 @@ class TrainingTrackingSmokeTests(unittest.TestCase):
 
                     for run_id in runs["run_id"].tolist():
                         run = mlflow.get_run(run_id)
-                        artifact_root = _artifact_root_from_uri(run.info.artifact_uri)
+                        artifact_root = artifact_root_from_uri(run.info.artifact_uri)
                         model_path = artifact_root / "trained_model.joblib"
 
                         self.assertTrue(
@@ -169,21 +162,13 @@ class TrainingTrackingSmokeTests(unittest.TestCase):
                         self.assertNotIn("shared_metadata", run_config)
                         self.assertNotIn("tracking", run_config)
 
-                        if JOBLIB_AVAILABLE:
-                            trainer = joblib.load(model_path)
-                            self.assertEqual(trainer.algorithm, algorithm)
-                            self.assertIn(trainer.task_name, {"queue", "priority"})
-                            self.assertEqual(
-                                run_config["feature_matrix"]["columns"],
-                                len(trainer.feature_names_),
-                            )
-
-
-def _artifact_root_from_uri(artifact_uri: str) -> Path:
-    parsed = urlparse(artifact_uri)
-    if parsed.scheme == "file":
-        return Path(url2pathname(unquote(parsed.path)))
-    return Path(artifact_uri)
+                        trainer = joblib.load(model_path)
+                        self.assertEqual(trainer.algorithm, algorithm)
+                        self.assertIn(trainer.task_name, {"queue", "priority"})
+                        self.assertEqual(
+                            run_config["feature_matrix"]["columns"],
+                            len(trainer.feature_names_),
+                        )
 
 
 if __name__ == "__main__":

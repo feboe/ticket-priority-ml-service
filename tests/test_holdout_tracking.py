@@ -1,27 +1,16 @@
 from __future__ import annotations
 
-import importlib.util
 import json
 import tempfile
 import unittest
 from pathlib import Path
-from urllib.parse import unquote, urlparse
-from urllib.request import url2pathname
+
+import mlflow
 
 from src.evaluation import evaluate_fold
+from src.tracking import configure_tracking, log_holdout_evaluation_runs
+from tests.helpers import artifact_root_from_uri
 
-MLFLOW_AVAILABLE = importlib.util.find_spec("mlflow") is not None
-
-if MLFLOW_AVAILABLE:
-    import mlflow
-
-    from src.tracking import (
-        configure_tracking,
-        log_holdout_evaluation_runs,
-    )
-
-
-@unittest.skipUnless(MLFLOW_AVAILABLE, "mlflow is not installed")
 class HoldoutTrackingTests(unittest.TestCase):
     def test_logs_one_traceable_run_per_task(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -85,7 +74,7 @@ class HoldoutTrackingTests(unittest.TestCase):
 
             for run_id in run_ids.values():
                 run = mlflow.get_run(run_id)
-                artifact_root = _artifact_root_from_uri(run.info.artifact_uri)
+                artifact_root = artifact_root_from_uri(run.info.artifact_uri)
                 for artifact_name in (
                     "language_metrics.csv",
                     "per_class_metrics.csv",
@@ -106,14 +95,6 @@ class HoldoutTrackingTests(unittest.TestCase):
                     run_config["source_model"]["run_id"],
                     run.data.tags["source_model_run_id"],
                 )
-
-
-def _artifact_root_from_uri(artifact_uri: str) -> Path:
-    parsed = urlparse(artifact_uri)
-    if parsed.scheme == "file":
-        return Path(url2pathname(unquote(parsed.path)))
-    return Path(artifact_uri)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,9 +6,8 @@ import json
 import re
 import tempfile
 from collections.abc import Mapping
-from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import joblib
 import mlflow
@@ -17,11 +16,9 @@ import pandas as pd
 from .dataset_utils import compute_sha256
 
 
-@contextmanager
-def start_run(run_name: str, nested: bool = False) -> Iterator[Any]:
+def start_run(run_name: str, nested: bool = False) -> mlflow.ActiveRun:
     """Start an MLflow run."""
-    with mlflow.start_run(run_name=run_name, nested=nested) as run:
-        yield run
+    return mlflow.start_run(run_name=run_name, nested=nested)
 
 
 def configure_tracking(tracking_uri: str, experiment_name: str) -> None:

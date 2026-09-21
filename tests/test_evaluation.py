@@ -11,6 +11,34 @@ from src.evaluation import (
 )
 
 
+def _two_fold_evaluations(
+    *, label_ids: list[int], label_names: list[str], with_languages: bool = False
+):
+    language_rows = (
+        (["en", "en", "de", "de"], ["en", "de", "en", "de"])
+        if with_languages
+        else (None, None)
+    )
+    return [
+        evaluate_fold(
+            fold_index=1,
+            y_true=[0, 0, 1, 1],
+            y_pred=[0, 1, 1, 1],
+            label_ids=label_ids,
+            label_names=label_names,
+            languages=language_rows[0],
+        ),
+        evaluate_fold(
+            fold_index=2,
+            y_true=[0, 1, 2, 2],
+            y_pred=[0, 2, 2, 1],
+            label_ids=label_ids,
+            label_names=label_names,
+            languages=language_rows[1],
+        ),
+    ]
+
+
 class EvaluationModuleTests(unittest.TestCase):
     def setUp(self) -> None:
         self.label_ids = [0, 1, 2]
@@ -80,22 +108,12 @@ class EvaluationModuleTests(unittest.TestCase):
     def test_summarize_cv_results_computes_overall_mean_std_and_per_class_metrics(
         self,
     ) -> None:
-        fold_one = evaluate_fold(
-            fold_index=1,
-            y_true=[0, 0, 1, 1],
-            y_pred=[0, 1, 1, 1],
-            label_ids=self.label_ids,
-            label_names=self.label_names,
-        )
-        fold_two = evaluate_fold(
-            fold_index=2,
-            y_true=[0, 1, 2, 2],
-            y_pred=[0, 2, 2, 1],
+        fold_evaluations = _two_fold_evaluations(
             label_ids=self.label_ids,
             label_names=self.label_names,
         )
 
-        summary = summarize_cv_results([fold_one, fold_two])
+        summary = summarize_cv_results(fold_evaluations)
 
         self.assertAlmostEqual(summary["overall_metrics"]["cv_accuracy_mean"], 0.625)
         self.assertAlmostEqual(summary["overall_metrics"]["cv_accuracy_std"], 0.125)
@@ -117,22 +135,12 @@ class EvaluationModuleTests(unittest.TestCase):
         self.assertIn("cv_tp_mean__high", summary["mlflow_metrics"])
 
     def test_summarize_cv_results_builds_confusion_matrix_mean_std(self) -> None:
-        fold_one = evaluate_fold(
-            fold_index=1,
-            y_true=[0, 0, 1, 1],
-            y_pred=[0, 1, 1, 1],
-            label_ids=self.label_ids,
-            label_names=self.label_names,
-        )
-        fold_two = evaluate_fold(
-            fold_index=2,
-            y_true=[0, 1, 2, 2],
-            y_pred=[0, 2, 2, 1],
+        fold_evaluations = _two_fold_evaluations(
             label_ids=self.label_ids,
             label_names=self.label_names,
         )
 
-        summary = summarize_cv_results([fold_one, fold_two])
+        summary = summarize_cv_results(fold_evaluations)
         confusion_mean = summary["confusion_matrix_mean"].set_index("actual_label")
         confusion_std = summary["confusion_matrix_std"].set_index("actual_label")
         per_class_confusion = summary["per_class_confusion"]
@@ -150,24 +158,13 @@ class EvaluationModuleTests(unittest.TestCase):
     def test_summarize_cv_results_aggregates_language_metrics_and_flattens_mlflow_keys(
         self,
     ) -> None:
-        fold_one = evaluate_fold(
-            fold_index=1,
-            y_true=[0, 0, 1, 1],
-            y_pred=[0, 1, 1, 1],
+        fold_evaluations = _two_fold_evaluations(
             label_ids=self.label_ids,
             label_names=self.label_names,
-            languages=["en", "en", "de", "de"],
-        )
-        fold_two = evaluate_fold(
-            fold_index=2,
-            y_true=[0, 1, 2, 2],
-            y_pred=[0, 2, 2, 1],
-            label_ids=self.label_ids,
-            label_names=self.label_names,
-            languages=["en", "de", "en", "de"],
+            with_languages=True,
         )
 
-        summary = summarize_cv_results([fold_one, fold_two])
+        summary = summarize_cv_results(fold_evaluations)
         language_metrics = summary["language_metrics"].set_index("language")
 
         self.assertEqual(language_metrics.index.tolist(), ["en", "de"])
