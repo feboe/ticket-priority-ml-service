@@ -205,6 +205,91 @@ def log_model_artifact(
         _log_artifact(artifact_path, Path(temp_dir))
 
 
+def log_holdout_evaluation_runs(
+    *,
+    evaluations: Mapping[str, Any],
+    dataset_metadata: Mapping[str, Any],
+    model_metadata: Mapping[str, Any],
+    run_group: str,
+) -> dict[str, str]:
+    """Log one traceable MLflow holdout-evaluation run per task."""
+    run_ids: dict[str, str] = {}
+
+    for task_name, result in evaluations.items():
+        task_model_metadata = dict(model_metadata.get(task_name, {}))
+        source_model_run_id = task_model_metadata.get("run_id")
+        if not source_model_run_id:
+            raise ValueError(
+                f"Missing source model run ID for holdout task '{task_name}'."
+            )
+
+        metrics = {
+            "holdout_accuracy": float(result.fold_metrics["accuracy"]),
+            "holdout_macro_f1": float(result.fold_metrics["macro_f1"]),
+            **_flatten_holdout_language_metrics(result.language_metrics),
+        }
+        params = {
+            "run_group": run_group,
+            "evaluation_type": "frozen_holdout",
+            "task_name": task_name,
+            "dataset_file": dataset_metadata["file"],
+            "dataset_sha256": dataset_metadata["sha256"],
+            "dataset_source_row_count": dataset_metadata["source_row_count"],
+            "dataset_evaluated_row_count": dataset_metadata["evaluated_row_count"],
+            "languages": dataset_metadata["languages"],
+            "source_model_run_id": source_model_run_id,
+            "source_training_dataset_id": task_model_metadata.get("dataset_id"),
+        }
+        tags = {
+            "run_type": "holdout_evaluation",
+            "task_name": task_name,
+            "source_model_run_id": source_model_run_id,
+            "dataset_sha256": dataset_metadata["sha256"],
+        }
+        artifact_names = {
+            "language_metrics": "language_metrics.csv",
+            "per_class_metrics": "per_class_metrics.csv",
+            "confusion_matrix": "confusion_matrix.csv",
+            "per_class_confusion": "per_class_confusion.csv",
+            "run_config": "holdout_run_config.json",
+        }
+        run_config = {
+            "evaluation": {
+                "type": "frozen_holdout",
+                "run_group": run_group,
+                "task_name": task_name,
+            },
+            "dataset": dict(dataset_metadata),
+            "source_model": task_model_metadata,
+            "metrics": metrics,
+            "artifacts": artifact_names,
+        }
+        run_name = (
+            f"{_slugify(run_group)}::{task_name}::"
+            f"{str(dataset_metadata['sha256'])[:12]}"
+        )
+
+        with start_run(run_name) as run:
+            log_run_metadata(params=params, tags=tags, metrics=metrics)
+            log_dataframe_artifact(
+                result.language_metrics, artifact_names["language_metrics"]
+            )
+            log_dataframe_artifact(
+                result.per_class_metrics, artifact_names["per_class_metrics"]
+            )
+            log_dataframe_artifact(
+                result.confusion_matrix, artifact_names["confusion_matrix"]
+            )
+            log_dataframe_artifact(
+                result.per_class_confusion,
+                artifact_names["per_class_confusion"],
+            )
+            log_json_artifact(run_config, artifact_names["run_config"])
+            run_ids[task_name] = run.info.run_id
+
+    return run_ids
+
+
 def _log_artifact(artifact_path: Path, temp_root: Path) -> None:
     relative_parent = artifact_path.parent.relative_to(temp_root)
     artifact_subdir = None if str(relative_parent) == "." else str(relative_parent)
@@ -217,6 +302,20 @@ def _stringify(value: Any) -> str:
     if isinstance(value, (list, tuple, set, dict)):
         return json.dumps(value, sort_keys=True)
     return str(value)
+
+
+def _flatten_holdout_language_metrics(
+    language_metrics: pd.DataFrame,
+) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+    for row in language_metrics.itertuples(index=False):
+        language_slug = _slugify(str(row.language))
+        metrics[f"holdout_accuracy__lang_{language_slug}"] = float(row.accuracy)
+        metrics[f"holdout_macro_f1__lang_{language_slug}"] = float(row.macro_f1)
+        metrics[f"holdout_sample_count__lang_{language_slug}"] = float(
+            row.sample_count
+        )
+    return metrics
 
 
 def _slugify(value: str) -> str:

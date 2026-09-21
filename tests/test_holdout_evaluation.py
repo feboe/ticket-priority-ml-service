@@ -96,10 +96,21 @@ class HoldoutEvaluationTests(unittest.TestCase):
                     "queue": {"run_id": "queue-run"},
                     "priority": {"run_id": "priority-run"},
                 },
+                tracking_metadata={
+                    "experiment_name": "holdout-test",
+                    "run_ids": {
+                        "queue": "queue-evaluation-run",
+                        "priority": "priority-evaluation-run",
+                    },
+                },
             )
 
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(summary["dataset"]["evaluated_row_count"], 4)
+            self.assertEqual(
+                summary["tracking"]["run_ids"]["queue"],
+                "queue-evaluation-run",
+            )
             self.assertEqual(summary["tasks"]["queue"]["model"]["run_id"], "queue-run")
             self.assertAlmostEqual(summary["tasks"]["priority"]["accuracy"], 0.75)
             for task_name in ("queue", "priority"):

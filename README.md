@@ -88,6 +88,12 @@ For full retraining, download the public Kaggle dataset [Multilingual Customer S
 
 `data/aa_dataset-tickets-multi-lang-5-2-50-version.csv`
 
+Install the full ML dependencies before training or holdout evaluation:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
 The Kaggle bundle contains multiple CSV files. This repository uses the file above by default, or you can train on a different file with:
 
 ```bash
@@ -95,7 +101,6 @@ python -m scripts.train --data data/<filename>.csv
 ```
 
 ```bash
-python -m pip install -r requirements.txt
 python -m scripts.train --algorithm linear_svc --run-group algo-benchmark-v1
 ```
 
@@ -110,9 +115,12 @@ Evaluate the promoted models on the frozen holdout with:
 python -m scripts.evaluate_holdout
 ```
 
-The command verifies the dataset hash, applies the EN/DE filter, and writes a
-JSON summary plus detailed CSV metrics under `results/holdout/`. This directory
-is kept local and ignored by Git.
+The command verifies the dataset hash, applies the EN/DE filter, and creates one
+MLflow run per task in the `ticket-priority-holdout` experiment. Each run links
+to its promoted source-model run and stores the dataset hash, filter metadata,
+headline metrics, language slices, and detailed CSV artifacts. A local JSON
+summary plus CSV copies are written under `results/holdout/`; this directory is
+kept local and ignored by Git.
 
 To verify the repository locally, run:
 

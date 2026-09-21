@@ -84,6 +84,7 @@ def write_holdout_artifacts(
     output_dir: Path,
     dataset_metadata: Mapping[str, Any],
     model_metadata: Mapping[str, Any],
+    tracking_metadata: Mapping[str, Any] | None = None,
 ) -> Path:
     """Write a compact JSON summary and detailed CSV evaluation artifacts."""
     missing_tasks = [
@@ -127,6 +128,7 @@ def write_holdout_artifacts(
         json.dumps(
             {
                 "dataset": dict(dataset_metadata),
+                "tracking": dict(tracking_metadata or {}),
                 "tasks": task_summaries,
             },
             indent=2,
