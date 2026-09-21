@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import tempfile
@@ -59,6 +60,13 @@ class TrainingTrackingSmokeTests(unittest.TestCase):
                     )
                     self.assertEqual(
                         set(runs["params.dataset_id"].tolist()), {"smoke_dataset"}
+                    )
+                    expected_dataset_sha256 = hashlib.sha256(
+                        data_path.read_bytes()
+                    ).hexdigest()
+                    self.assertEqual(
+                        set(runs["params.dataset_sha256"].tolist()),
+                        {expected_dataset_sha256},
                     )
                     self.assertEqual(set(runs["params.algorithm"].tolist()), {algorithm})
                     self.assertEqual(set(runs["params.analyzer"].tolist()), {"word"})
@@ -129,6 +137,10 @@ class TrainingTrackingSmokeTests(unittest.TestCase):
                             },
                         )
                         self.assertEqual(run_config["dataset"]["id"], "smoke_dataset")
+                        self.assertEqual(
+                            run_config["dataset"]["sha256"],
+                            expected_dataset_sha256,
+                        )
                         self.assertEqual(
                             run_config["task"]["name"], run.data.tags["task_name"]
                         )

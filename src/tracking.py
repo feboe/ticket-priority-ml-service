@@ -14,6 +14,8 @@ import joblib
 import mlflow
 import pandas as pd
 
+from .dataset_utils import compute_sha256
+
 
 @contextmanager
 def start_run(run_name: str, nested: bool = False) -> Iterator[Any]:
@@ -49,6 +51,7 @@ def build_dataset_metadata(df: pd.DataFrame, data_path: Path) -> dict[str, Any]:
         "dataset_id": data_path.stem,
         "dataset_path": str(data_path.resolve()),
         "dataset_row_count": int(len(df)),
+        "dataset_sha256": compute_sha256(data_path),
     }
 
 
@@ -65,6 +68,7 @@ def build_shared_tracking_payload(
         "run_group": run_group,
         "dataset_id": dataset_metadata["dataset_id"],
         "dataset_row_count": dataset_metadata["dataset_row_count"],
+        "dataset_sha256": dataset_metadata["dataset_sha256"],
         "cv_folds": cv_folds,
         "random_state": random_state,
         "stratify_columns": stratify_columns,
@@ -127,6 +131,7 @@ def build_run_config(
             "id": dataset_metadata["dataset_id"],
             "path": dataset_metadata["dataset_path"],
             "row_count": dataset_metadata["dataset_row_count"],
+            "sha256": dataset_metadata["dataset_sha256"],
         },
         "training": {
             "cv_folds": cv_folds,

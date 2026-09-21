@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -10,22 +9,13 @@ from typing import Any
 
 import pandas as pd
 
+from .dataset_utils import compute_sha256
 from .evaluation import FoldEvaluation, evaluate_fitted_trainer
 
 HOLDOUT_SHA256 = "9aae7120cf459fc27561febe29c7757c6d222bfebff50e8baa868991e57b87d1"
 HOLDOUT_LANGUAGES = ("en", "de")
 REQUIRED_HOLDOUT_COLUMNS = {"subject", "body", "language", "queue", "priority"}
 REQUIRED_TASKS = ("queue", "priority")
-
-
-def compute_sha256(path: Path) -> str:
-    """Return the SHA-256 digest of a file without loading it all into memory."""
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
 
 def verify_sha256(path: Path, expected_sha256: str) -> str:
     """Verify a file against its frozen digest and return the actual digest."""
