@@ -19,7 +19,6 @@ DEFAULT_SERVING_CONFIG_PATH = (
 
 @dataclass
 class LoadedTaskModel:
-    task_name: str
     run_id: str
     algorithm: str
     model_family: str
@@ -75,21 +74,11 @@ def _format_ngram_range(ngram_min: Any, ngram_max: Any) -> str:
     return f"{ngram_min}-{ngram_max} grams"
 
 
-def _build_feature_summary(
-    *, preprocessing: dict[str, Any], feature_matrix: dict[str, Any]
-) -> str:
+def _build_feature_summary(*, preprocessing: dict[str, Any]) -> str:
     analyzer = str(preprocessing.get("analyzer", "word"))
     ngram_min = preprocessing.get("ngram_min", 1)
     ngram_max = preprocessing.get("ngram_max", 1)
-    base_summary = f"TF-IDF {analyzer} {_format_ngram_range(ngram_min, ngram_max)}"
-
-    length_enabled = bool(
-        preprocessing.get("length_feature_enabled")
-        or "length" in feature_matrix.get("feature_families", [])
-    )
-    if length_enabled:
-        return f"{base_summary} + length"
-    return base_summary
+    return f"TF-IDF {analyzer} {_format_ngram_range(ngram_min, ngram_max)}"
 
 
 class TicketRoutingService:
@@ -117,9 +106,6 @@ class TicketRoutingService:
                 (base_dir / spec["run_config_path"]).read_text(encoding="utf-8")
             )
             promoted_spec = promoted_models[task_name]
-            feature_matrix = promoted_spec.get(
-                "feature_matrix", run_config.get("feature_matrix", {})
-            )
             preprocessing = promoted_spec.get(
                 "preprocessing", run_config.get("preprocessing", {})
             )
@@ -128,15 +114,11 @@ class TicketRoutingService:
             dataset = promoted_spec.get("dataset", {})
 
             models[task_name] = LoadedTaskModel(
-                task_name=task_name,
                 run_id=promoted_spec.get("run_id", spec["run_id"]),
                 algorithm=str(model_config["algorithm"]),
                 model_family=str(model_config["model_family"]),
                 c=float(model_config["C"]),
-                feature_summary=_build_feature_summary(
-                    preprocessing=preprocessing,
-                    feature_matrix=feature_matrix,
-                ),
+                feature_summary=_build_feature_summary(preprocessing=preprocessing),
                 dataset_id=str(dataset["id"]),
                 cv_macro_f1_mean=float(headline_metrics["macro_f1_mean"]),
                 cv_accuracy_mean=float(headline_metrics["accuracy_mean"]),

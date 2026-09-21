@@ -54,13 +54,10 @@ def _normalize_run_config(
     normalized["preprocessing"] = preprocessing
 
     if "feature_matrix" not in normalized:
-        feature_families = ["tfidf"]
-        if preprocessing.get("length_feature_enabled"):
-            feature_families.append("length")
         normalized["feature_matrix"] = {
             "rows": normalized["dataset"]["row_count"],
             "columns": len(trainer.feature_names_),
-            "feature_families": feature_families,
+            "feature_families": ["tfidf"],
         }
 
     return normalized

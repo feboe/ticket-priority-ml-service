@@ -127,7 +127,6 @@ def main() -> None:
             sidebar_models = health.get("models")
         except requests.RequestException as exc:
             st.error(f"API unavailable: {exc}")
-            health = None
         response = st.session_state.prediction_response
         if response and response.get("models"):
             sidebar_models = response["models"]

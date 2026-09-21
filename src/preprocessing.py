@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 
 import pandas as pd
-from scipy.sparse import csr_matrix, hstack
+from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import LabelEncoder
 from nltk.corpus import stopwords
@@ -28,13 +28,6 @@ STOP_WORD_LANGUAGE_BY_PREFIX = {
 
 PRIORITY_CLASS_ORDER = ("low", "medium", "high")
 
-DEFAULT_LENGTH_FEATURE_ENABLED = False
-LENGTH_FEATURE_ENABLED_BY_TARGET = {
-    "queue": False,
-    "priority": False,
-}
-
-
 @lru_cache(maxsize=4)
 def _load_nltk_stop_words(language: str) -> frozenset[str]:
     try:
@@ -49,7 +42,6 @@ class VectorizedDataset:
 
     X: csr_matrix
     y: pd.Series
-    frame: pd.DataFrame
     feature_names: list[str]
     target_mapping: dict[int, str] | None = None
 
@@ -63,7 +55,6 @@ class TextPreparationPipeline:
     language_column: str = "language"
     combined_column: str = "ticket_text"
     cleaned_column: str = "ticket_text_clean"
-    length_column: str = "ticket_text_length"
 
     def transform(self, frame: pd.DataFrame) -> pd.DataFrame:
         df = frame.copy()
@@ -93,7 +84,6 @@ class TextPreparationPipeline:
             dtype="object",
         )
         df[self.cleaned_column] = cleaned_text
-        df[self.length_column] = cleaned_text.str.len()
         return df
 
     @staticmethod
@@ -155,32 +145,6 @@ class TfidfFeatureExtractor:
 
 
 @dataclass
-class LengthFeatureExtractor:
-    """Create a single numeric feature from cleaned ticket length."""
-
-    length_column: str = "ticket_text_length"
-    feature_name: str = "ticket_text_length"
-    scale_: float = field(default=1.0, init=False)
-
-    def fit_transform(self, frame: pd.DataFrame) -> csr_matrix:
-        values = self._get_values(frame)
-        self.scale_ = max(float(values.max()), 1.0)
-        return csr_matrix((values / self.scale_).to_numpy().reshape(-1, 1))
-
-    def transform(self, frame: pd.DataFrame) -> csr_matrix:
-        values = self._get_values(frame)
-        return csr_matrix((values / self.scale_).to_numpy().reshape(-1, 1))
-
-    def get_feature_names(self) -> list[str]:
-        return [self.feature_name]
-
-    def _get_values(self, frame: pd.DataFrame) -> pd.Series:
-        if self.length_column not in frame.columns:
-            raise KeyError(f"Missing length column: {self.length_column}")
-        return frame[self.length_column].astype(float)
-
-
-@dataclass
 class TargetEncoder:
     """Encode string targets into integer class ids."""
 
@@ -228,7 +192,6 @@ class TfidfTargetPreprocessor:
     """Shared TF-IDF preprocessing logic for a single target."""
 
     target_column: str
-    length_feature_enabled: bool = DEFAULT_LENGTH_FEATURE_ENABLED
     text_pipeline: TextPreparationPipeline = field(
         default_factory=TextPreparationPipeline
     )
@@ -236,24 +199,13 @@ class TfidfTargetPreprocessor:
         default_factory=TfidfFeatureExtractor
     )
     target_encoder: TargetEncoder | OrderedTargetEncoder | None = None
-    length_extractor: LengthFeatureExtractor | None = field(default=None, init=False)
-
-    def __post_init__(self) -> None:
-        if self.length_feature_enabled:
-            self.length_extractor = LengthFeatureExtractor()
 
     def fit_transform(self, frame: pd.DataFrame) -> VectorizedDataset:
         prepared = self._prepare_frame(frame)
-        X_text = self.feature_extractor.fit_transform(
+        X = self.feature_extractor.fit_transform(
             prepared[self.text_pipeline.cleaned_column]
         )
         feature_names = self.feature_extractor.get_feature_names()
-        if self.length_extractor is None:
-            X = X_text
-        else:
-            X_length = self.length_extractor.fit_transform(prepared)
-            X = hstack([X_text, X_length], format="csr")
-            feature_names = feature_names + self.length_extractor.get_feature_names()
 
         y = prepared[self.target_column].reset_index(drop=True)
         target_mapping = None
@@ -263,20 +215,15 @@ class TfidfTargetPreprocessor:
         return VectorizedDataset(
             X=X,
             y=y,
-            frame=prepared.reset_index(drop=True),
             feature_names=feature_names,
             target_mapping=target_mapping,
         )
 
     def transform(self, frame: pd.DataFrame) -> csr_matrix:
         prepared = self.text_pipeline.transform(frame)
-        X_text = self.feature_extractor.transform(
+        return self.feature_extractor.transform(
             prepared[self.text_pipeline.cleaned_column]
         )
-        if self.length_extractor is None:
-            return X_text
-        X_length = self.length_extractor.transform(prepared)
-        return hstack([X_text, X_length], format="csr")
 
     def _prepare_frame(self, frame: pd.DataFrame) -> pd.DataFrame:
         if not isinstance(frame, pd.DataFrame):
@@ -302,7 +249,6 @@ class QueuePreprocessor:
     def __post_init__(self) -> None:
         self.pipeline = TfidfTargetPreprocessor(
             target_column="queue",
-            length_feature_enabled=LENGTH_FEATURE_ENABLED_BY_TARGET["queue"],
             target_encoder=TargetEncoder(),
         )
 
@@ -322,7 +268,6 @@ class PriorityPreprocessor:
     def __post_init__(self) -> None:
         self.pipeline = TfidfTargetPreprocessor(
             target_column="priority",
-            length_feature_enabled=LENGTH_FEATURE_ENABLED_BY_TARGET["priority"],
             target_encoder=OrderedTargetEncoder(PRIORITY_CLASS_ORDER),
         )
 

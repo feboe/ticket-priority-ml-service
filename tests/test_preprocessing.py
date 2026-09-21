@@ -107,15 +107,5 @@ class TargetPreprocessorContractTests(StopWordCacheIsolationTestCase):
         self.assertEqual(dataset.y.tolist(), [0, 1, 2])
         self.assertEqual(dataset.target_mapping, {0: "low", 1: "medium", 2: "high"})
 
-    def test_task_preprocessors_do_not_add_length_feature_by_default(self) -> None:
-        queue_dataset = QueuePreprocessor().fit_transform(
-            self.queue_frame.assign(language="unknown")
-        )
-        priority_dataset = PriorityPreprocessor().fit_transform(self.priority_frame)
-
-        self.assertNotIn("ticket_text_length", queue_dataset.feature_names)
-        self.assertNotIn("ticket_text_length", priority_dataset.feature_names)
-
-
 if __name__ == "__main__":
     unittest.main()

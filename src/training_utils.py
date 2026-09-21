@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Sequence
 
 import pandas as pd
-from sklearn.model_selection import StratifiedKFold, train_test_split
+from sklearn.model_selection import StratifiedKFold
 
 
 @dataclass

@@ -22,7 +22,6 @@
   },
   "preprocessing": {
     "analyzer": "word",
-    "length_feature_enabled": false,
     "max_df": 0.95,
     "min_df": 1,
     "ngram_max": 3,

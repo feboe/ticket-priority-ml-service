@@ -80,19 +80,6 @@ class ClassificationTrainer:
         self.target_mapping_ = train_data.target_mapping or {}
         return self
 
-    def fit_full(self, df: pd.DataFrame) -> ClassificationTrainer:
-        return self.fit_train(df)
-
-    def predict(self, df: pd.DataFrame) -> pd.Series:
-        if not self.target_mapping_:
-            raise ValueError("Target mapping is unavailable. Fit the trainer first.")
-        X = self.preprocessor.transform(df)
-        predictions = self.model.predict(X)
-        decoded = pd.Series(predictions).map(
-            lambda value: self.target_mapping_[int(value)]
-        )
-        return pd.Series(decoded, name=self.task_name)
-
     def get_label_order(self) -> list[int]:
         return sorted(self.target_mapping_)
 
@@ -123,16 +110,12 @@ class ClassificationTrainer:
             "ngram_max": feature_extractor.ngram_range[1],
             "analyzer": feature_extractor.analyzer,
             "sublinear_tf": feature_extractor.sublinear_tf,
-            "length_feature_enabled": self.preprocessor.pipeline.length_feature_enabled,
         }
 
     def get_feature_summary(self) -> dict[str, Any]:
-        feature_families = ["tfidf"]
-        if self.preprocessor.pipeline.length_feature_enabled:
-            feature_families.append("length")
         return {
             "feature_count": len(self.feature_names_),
-            "feature_families": feature_families,
+            "feature_families": ["tfidf"],
         }
 
     def _build_model(self) -> LogisticRegression | LinearSVC:
@@ -222,5 +205,5 @@ def fit_final_model(
         algorithm=algorithm,
         random_state=random_state,
     )
-    trainer.fit_full(df)
+    trainer.fit_train(df)
     return trainer

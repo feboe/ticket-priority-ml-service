@@ -67,10 +67,6 @@ class TrainingTrackingSmokeTests(unittest.TestCase):
                         set(runs["params.model_family"].tolist()),
                         {expected_model_family},
                     )
-                    self.assertEqual(
-                        set(runs["params.length_feature_enabled"].tolist()), {"false"}
-                    )
-
                     self.assertIn("metrics.cv_accuracy_mean", runs.columns)
                     self.assertIn("metrics.cv_macro_f1_mean", runs.columns)
                     self.assertTrue(
@@ -139,9 +135,6 @@ class TrainingTrackingSmokeTests(unittest.TestCase):
                         )
                         self.assertEqual(run_config["model"]["algorithm"], algorithm)
                         self.assertEqual(run_config["preprocessing"]["analyzer"], "word")
-                        self.assertFalse(
-                            run_config["preprocessing"]["length_feature_enabled"]
-                        )
                         self.assertEqual(
                             run_config["artifacts"]["trained_model"],
                             "trained_model.joblib",
