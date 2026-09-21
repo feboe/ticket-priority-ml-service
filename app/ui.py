@@ -9,6 +9,10 @@ import requests
 import streamlit as st
 
 DEFAULT_API_BASE_URL = "http://127.0.0.1:8000"
+LANGUAGE_LABELS = {
+    "en": "English",
+    "de": "German",
+}
 
 
 def get_api_base_url() -> str:
@@ -41,6 +45,19 @@ def fetch_health(base_url: str | None = None) -> dict[str, Any]:
     response = requests.get(f"{base_url or get_api_base_url()}/health", timeout=10)
     response.raise_for_status()
     return response.json()
+
+
+def build_prediction_payload(
+    *, subject: str, body: str, language: str | None
+) -> dict[str, str]:
+    """Build a prediction request after validating the supported language."""
+    if language not in LANGUAGE_LABELS:
+        raise ValueError("Select English or German before predicting.")
+    return {
+        "subject": subject,
+        "body": body,
+        "language": language,
+    }
 
 
 def _render_prediction_card(task_name: str, prediction: dict[str, Any]) -> None:
@@ -91,7 +108,7 @@ def main() -> None:
     if "body" not in st.session_state:
         st.session_state.body = ""
     if "language" not in st.session_state:
-        st.session_state.language = ""
+        st.session_state.language = None
     if "prediction_response" not in st.session_state:
         st.session_state.prediction_response = None
     if "demo_title" not in st.session_state:
@@ -130,7 +147,7 @@ def main() -> None:
                     st.session_state.demo_index = demo_payload["index"] + 1
                     st.session_state.subject = demo_payload["ticket"]["subject"]
                     st.session_state.body = demo_payload["ticket"]["body"]
-                    st.session_state.language = demo_payload["ticket"].get("language", "")
+                    st.session_state.language = demo_payload["ticket"].get("language")
                     st.session_state.demo_title = demo_payload["title"]
                 except requests.RequestException as exc:
                     st.error(f"Could not fetch demo ticket: {exc}")
@@ -142,27 +159,32 @@ def main() -> None:
             st.text_input("Subject", key="subject")
             st.text_area("Body", key="body", height=260)
             st.selectbox(
-                "Language",
-                options=["", "en", "de"],
-                format_func=lambda value: value or "Auto / not provided",
+                "Language *",
+                options=list(LANGUAGE_LABELS),
+                index=None,
+                format_func=LANGUAGE_LABELS.get,
+                placeholder="Select English or German",
                 key="language",
             )
             submitted = st.form_submit_button("Predict Ticket", use_container_width=True)
 
         if submitted:
             try:
-                payload = {
-                    "subject": st.session_state.subject,
-                    "body": st.session_state.body,
-                }
-                if st.session_state.language:
-                    payload["language"] = st.session_state.language
-                st.session_state.prediction_response = request_prediction(
-                    payload,
-                    base_url,
+                payload = build_prediction_payload(
+                    subject=st.session_state.subject,
+                    body=st.session_state.body,
+                    language=st.session_state.language,
                 )
-            except requests.RequestException as exc:
-                st.error(f"Prediction request failed: {exc}")
+            except ValueError as exc:
+                st.warning(str(exc))
+            else:
+                try:
+                    st.session_state.prediction_response = request_prediction(
+                        payload,
+                        base_url,
+                    )
+                except requests.RequestException as exc:
+                    st.error(f"Prediction request failed: {exc}")
 
     with right_col:
         response = st.session_state.prediction_response
