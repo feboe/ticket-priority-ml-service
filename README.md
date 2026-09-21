@@ -90,12 +90,12 @@ For full retraining, download the public Kaggle dataset [Multilingual Customer S
 The Kaggle bundle contains multiple CSV files. This repository uses the file above by default, or you can train on a different file with:
 
 ```powershell
-.\.venv\Scripts\python train.py --data data/<filename>.csv
+.\.venv\Scripts\python -m scripts.train --data data/<filename>.csv
 ```
 
 ```powershell
 pip install -r requirements.txt
-.\.venv\Scripts\python train.py --algorithm linear_svc --run-group algo-benchmark-v1
+.\.venv\Scripts\python -m scripts.train --algorithm linear_svc --run-group algo-benchmark-v1
 ```
 
 Dataset hashes, dataset roles, and the frozen EN/DE holdout protocol are
@@ -106,7 +106,7 @@ hyperparameter selection.
 Evaluate the promoted models on the frozen holdout with:
 
 ```powershell
-.\.venv\Scripts\python evaluate_holdout.py
+.\.venv\Scripts\python -m scripts.evaluate_holdout
 ```
 
 The command verifies the dataset hash, applies the EN/DE filter, and writes a

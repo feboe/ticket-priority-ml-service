@@ -1,4 +1,4 @@
-"""Top-level entrypoint for stratified cross-validation training."""
+"""Command-line entrypoint for stratified cross-validation training."""
 
 from __future__ import annotations
 

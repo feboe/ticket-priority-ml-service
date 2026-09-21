@@ -1,4 +1,4 @@
-"""Evaluate the fixed promoted models on the frozen EN/DE holdout."""
+"""Command-line entrypoint for evaluating promoted models on the holdout."""
 
 from __future__ import annotations
 

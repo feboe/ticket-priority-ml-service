@@ -53,7 +53,8 @@ def run_training_smoke(
     return subprocess.run(
         [
             sys.executable,
-            "train.py",
+            "-m",
+            "scripts.train",
             "--data",
             str(data_path),
             "--cv-folds",
